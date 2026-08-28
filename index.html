@@ -4,6 +4,8 @@ const char index_html[] PROGMEM = R"HTML(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <title>SPGT Power Controller</title>
     <style>
         :root { 
@@ -224,13 +226,6 @@ const char index_html[] PROGMEM = R"HTML(
         .button-group { display: flex; flex-wrap: wrap; gap: 10px; padding: 0 40px 20px; }
         .button-group button {flex-grow: 1;}
     </style>
-    <!-- FIREBASE REALTIME DATABASE SDK -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-    <style>
-        .search-box { background: #0f1218; border: 2px solid #007bff; border-radius: 12px; padding: 15px; margin-bottom: 20px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-        .search-input { width: 85%; max-width: 380px; padding: 10px; border-radius: 8px; border: 1.5px solid #007bff; background: #1a2332; color: #fff; font-size: 1.1em; text-align: center; font-weight: bold; }
-    </style>
 </head>
 <body>
     <div id="fullPageAlert" class="full-page-alert">
@@ -252,14 +247,14 @@ const char index_html[] PROGMEM = R"HTML(
             </div>
             <p class="model-info">SPGT Power Controller</p>
         </header>
-        <!-- 1 LAKH CUSTOMER SERIAL NUMBER INPUT -->
-    <div class="search-box">
-        <span style="color:#28a745; font-weight:bold; font-size:1.1em; display:block; margin-bottom:8px;">🔢 ENTER DEVICE SERIAL NUMBER:</span>
-        <input type="text" id="custSN" class="search-input" placeholder="e.g. SN: SE-SG-X1-XXXXXXXX">
-        <br>
-        <button onclick="connectFirebase()" class="btn" style="width:auto; max-width:260px; margin-top:10px; background:linear-gradient(145deg, #28a745, #218838);">⚡ Connect Live Device</button>
-        <div id="statusMsg" style="margin-top:8px; font-weight:bold; color:#ffe580;"></div>
-    </div>
+         <!-- 🔢 ૧ લાખ ગ્રાહકો માટે સીરીયલ નંબર નાખવાનું બોક્સ -->
+        <div style="background: #081a2e; border: 2px solid #00e676; border-radius: 12px; padding: 15px; margin-bottom: 20px; text-align: center;">
+            <span style="color:#00e676; font-weight:bold; font-size:1.1em; display:block; margin-bottom:8px;">🔢 ENTER DEVICE SERIAL NUMBER:</span>
+            <input type="text" id="custSN" placeholder="e.g. SN: SE-SG-X1-5DDAF380" style="width:85%; max-width:380px; padding:10px; border-radius:8px; border:2px solid #00bfff; background:#1d2b3a; color:#fff; font-size:1.1em; text-align:center; font-weight:bold;">
+            <br>
+            <button onclick="connectFirebase()" class="btn" style="width:auto; margin-top:10px; background:linear-gradient(145deg, #00e676, #00a152);">⚡ Connect Live Device</button>
+            <div id="statusMsg" style="margin-top:6px; font-weight:bold; color:#ffd600;"></div>
+        </div>
         <main class="content">
             <div class="card">
                 <h2 class="card-title">System Status</h2>
@@ -580,73 +575,78 @@ const char index_html[] PROGMEM = R"HTML(
     </div>
 
     <script>
+    // 🌐 FIREBASE REALTIME CLOUD CONNECTION ENGINE
+        const firebaseConfig = {
+            databaseURL: "https://se-smart-safaty-x0-default-rtdb.asia-southeast1.firebasedatabase.app"
+        };
+        if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+        const db = firebase.database();
+
+        let formattedSN = "";
+        let isCloudMode = false;
+
+        function connectFirebase() {
+            var sn = document.getElementById("custSN").value.trim();
+            if(!sn) { alert("કૃપા કરીને Device Serial Number દાખલ કરો!"); return; }
+            localStorage.setItem("spgt_user_sn", sn);
+
+            formattedSN = sn.replace(/ /g, "_").replace(/:/g, "_");
+            document.getElementById("statusMsg").innerText = "Connecting to " + sn + "...";
+
+            db.ref("devices/" + formattedSN + "/live").on("value", function(snapshot) {
+                var d = snapshot.val();
+                if(d) {
+                    isCloudMode = true;
+                    document.getElementById("statusMsg").innerText = "✅ Device Connected Online!";
+                    document.getElementById("statusMsg").style.color = "#00e676";
+
+                    isRelayOn = d.relayState;
+                    document.getElementById('pumpStatus').textContent = d.relayState ? 'ON' : 'OFF';
+                    document.getElementById('voltage').textContent = (d.voltage || 0).toFixed(1) + ' V';
+                    document.getElementById('current').textContent = (d.current || 0).toFixed(2) + ' A';
+                    document.getElementById('energy').textContent = (d.energy || 0).toFixed(3) + ' kWh';
+                    document.getElementById('cost').textContent = (d.cost || 0).toFixed(2) + ' Rs.';
+                    document.getElementById('acRuntime').textContent = d.acRuntime || "0h:0m:0s";
+                    document.getElementById('ipAddress').textContent = d.ip || "Cloud Online";
+
+                    document.getElementById('ctrlPermCheckbox').checked = d.controlPermission;
+                    document.getElementById('secureControlDiv').style.display = d.controlPermission ? 'none' : 'block';
+
+                    document.getElementById('mUnits').textContent = (d.monthlyUnits || 0).toFixed(2);
+                    document.getElementById('mBill').textContent = '₹ ' + ((d.monthlyUnits || 0) * (d.unitPrice || 1.0)).toFixed(2);
+                    document.getElementById('dUsage').textContent = (d.todayUnits || 0).toFixed(2);
+                    document.getElementById('lBill').textContent = '₹ ' + (d.lastBill || 0).toFixed(2);
+
+                    var isFault = d.protectionStatus && d.protectionStatus.includes("FAULT");
+                    var pBox = document.getElementById('protection-box');
+                    pBox.textContent = d.protectionStatus || "System Operating Normally";
+                    pBox.className = 'protection-msg ' + (isFault ? 'alert' : 'normal');
+
+                    document.getElementById('pumpOnBtn').style.backgroundColor = isRelayOn ? 'var(--primary-blue)' : 'var(--green)';
+                    document.getElementById('pumpOffBtn').style.backgroundColor = !isRelayOn ? 'var(--primary-blue)' : 'var(--red)';
+
+                    document.getElementById('ovValue').textContent = (d.voltage || 0).toFixed(1) + ' V';
+                    document.getElementById('uvValue').textContent = (d.voltage || 0).toFixed(1) + ' V';
+                    document.getElementById('ocValue').textContent = (d.current || 0).toFixed(2) + ' A';
+                } else {
+                    document.getElementById("statusMsg").innerText = "⚠️ Device Offline or Serial Number Not Found.";
+                    document.getElementById("statusMsg").style.color = "#ff1744";
+                }
+            });
+        }
+
+        function sendCloudCmd(cmd, msg) {
+            if(!formattedSN) { alert("પહેલા Serial Number નાખી Connect Device કરો!"); return; }
+            db.ref("devices/" + formattedSN + "/commands").set(cmd).then(() => {
+                alert("✅ " + msg);
+            }).catch(err => { alert("Error: " + err.message); });
+        }
         let refreshIntervalId = null;
         let lastAlertState = null;
         let currentPassword = null; 
         let warrantyData = {};
         let isRelayOn = false;
-        // FIREBASE INITIALIZATION
-    const firebaseConfig = {
-        databaseURL: "https://motor-starter-425de-default-rtdb.asia-southeast1.firebasedatabase.app"
-    };
-    if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
-    }
-    const db = firebase.database();
-    let formattedSN = "";
-    let isCloudMode = false;
-
-    function connectFirebase() {
-        var sn = document.getElementById("custSN").value.trim();
-        if (!sn) { alert("કૃપા કરીને Device Serial Number દાખલ કરો!"); return; }
-        localStorage.setItem("my_ac_device_sn", sn);
         
-        formattedSN = sn.replace(/ /g, "_").replace(/:/g, "_");
-        document.getElementById("statusMsg").innerText = "Connecting to " + sn + "...";
-        document.getElementById("statusMsg").style.color = "#ffe580";
-
-        db.ref("devices/" + formattedSN + "/live").on("value", function(snapshot) {
-            var data = snapshot.val();
-            if (data) {
-                isCloudMode = true;
-                document.getElementById("statusMsg").innerText = "✅ Device Connected Online via Firebase!";
-                document.getElementById("statusMsg").style.color = "#28a745";
-
-                isRelayOn = data.relayState;
-                document.getElementById('pumpStatus').textContent = data.relayState ? 'ON' : 'OFF';
-                document.getElementById('voltage').textContent = (data.voltage !== undefined ? data.voltage.toFixed(1) : "0.0") + ' V';
-                document.getElementById('current').textContent = (data.current !== undefined ? data.current.toFixed(2) : "0.00") + ' A';
-                document.getElementById('energy').textContent = (data.kwh !== undefined ? data.kwh.toFixed(3) : "0.000") + ' kWh';
-                document.getElementById('cost').textContent = (data.cost !== undefined ? data.cost.toFixed(2) : "0.00") + ' Rs.';
-                if(data.todayKWh !== undefined) document.getElementById('dUsage').textContent = data.todayKWh.toFixed(2);
-                if(data.lastBill !== undefined) document.getElementById('lBill').textContent = '₹ ' + data.lastBill.toFixed(2);
-
-                const isFault = (data.protectionStatus && data.protectionStatus.includes("FAULT"));
-                const protectionBox = document.getElementById('protection-box');
-                protectionBox.className = 'protection-msg ' + (isFault ? 'alert' : 'normal');
-                protectionBox.textContent = data.protectionStatus || "System Operating Normally";
-
-                document.getElementById('pumpOnBtn').style.backgroundColor = isRelayOn ? 'var(--primary-blue)' : 'var(--green)';
-                document.getElementById('pumpOffBtn').style.backgroundColor = !isRelayOn ? 'var(--primary-blue)' : 'var(--red)';
-            } else {
-                document.getElementById("statusMsg").innerText = "⚠️ Device Offline or Serial Number Not Found!";
-                document.getElementById("statusMsg").style.color = "#dc3545";
-            }
-        });
-    }
-
-    // Cloud Command Function (GitHub Pages / Firebase)
-    function sendCloudCommand(cmd) {
-        if (!formattedSN) {
-            alert("પહેલા ઉપર Serial Number દાખલ કરી Connect Live Device કરો!");
-            return;
-        }
-        db.ref("devices/" + formattedSN + "/commands").set(cmd).then(() => {
-            alert("✅ કમાન્ડ મોકલાઈ ગયો છે: " + cmd);
-        }).catch((err) => {
-            alert("❌ કમાન્ડ મોકલવામાં ભૂલ: " + err.message);
-        });
-    }
         let settingsCardUnlocked = false; // NEW: Flag for settings lock state
         let settingsUnlockPassword = '';  // NEW: Store password for saving
 
@@ -739,31 +739,60 @@ const char index_html[] PROGMEM = R"HTML(
                 displayWarrantyOnMainPage();
             });
         }
-        function resetEnergyCost() { if(confirm("Are you sure?")) { fetch('/resetenergy').then(updateStatus); } }
+        function resetEnergyCost() { 
+            if(confirm("Are you sure you want to reset Energy & Cost?")) { 
+                if(isCloudMode) {
+                    sendCloudCmd('RESET_ENERGY', 'Energy Reset Command Sent to Cloud!');
+                    return;
+                }
+                fetch('/resetenergy').then(updateStatus); 
+            } 
+        }
+
+        function restartSystem() { 
+            if(confirm("Restart System?")) {
+                if(isCloudMode) {
+                    sendCloudCmd('RESTART', 'Restart Command Sent to Cloud!');
+                    return;
+                }
+                fetch('/restart'); 
+            }
+        }
         function resetAcRuntime() { if(confirm("Are you sure you want to reset AC Runtime?")) { fetch('/resetruntime').then(updateStatus); } }
         function updateProtectionValue(id, val, trig) { const el = document.getElementById(id); el.textContent = val; el.classList.toggle('triggered', trig); }
         function updateProtectionIndicator(ledId, itemId, isActive) { document.getElementById(ledId).className = `indicator ${isActive ? 'high' : 'low'}`; document.getElementById(itemId).classList.toggle('protection-active', isActive); }
         function checkProtectionAlerts(data) { const isProt = data.protectionMessage.includes('FAULT'); if (isProt && lastAlertState !== data.protectionMessage) { document.getElementById('alertMessage').textContent = data.protectionMessage; document.getElementById('fullPageAlert').style.display = 'flex'; } lastAlertState = isProt ? data.protectionMessage : null; }
         function toggleAutoRefresh() { const chk = document.getElementById('autoRefreshCheckbox'); if (chk.checked) { refreshIntervalId = setInterval(updateStatus, 2000); } else { clearInterval(refreshIntervalId); } localStorage.setItem('autoRefresh', chk.checked); }
+        
         function controlRelay(state) { 
-            // Manual ON command also acts as a "reset" for a latched fault
-           const pass = document.getElementById('ctrlPasswordInput').value;
-           if (isCloudMode || location.hostname.includes("github.io") || location.protocol === "file:") {
-        // Firebase Cloud Command
-        sendCloudCommand(state ? "AC_ON" : "AC_OFF");
-        return;
-    }
-    fetch('/controlRelay?state=' + state + '&pass=' + encodeURIComponent(pass)).then(response => {
-        if (response.status === 401) {
-            alert("Error: Incorrect Control Password!");
-        } else if (response.status === 403) {
-            alert("Cannot turn on AC. System is latched in a fault condition.");
-        } else {
-            document.getElementById('ctrlPasswordInput').value = '';
-            updateStatus(); 
+            let passInput = document.getElementById('ctrlPasswordInput');
+            let pass = passInput ? passInput.value : '';
+            let ctrlPerm = document.getElementById('ctrlPermCheckbox').checked;
+
+            if (!ctrlPerm && (!pass || pass.trim() === '')) {
+                pass = prompt("Enter Control Password to turn AC " + (state ? "ON" : "OFF") + ":");
+                if (pass === null || pass.trim() === '') return;
+            }
+
+            // જો GitHub Cloud પર હોય તો Firebase કમાન્ડ મોકલશે
+            if (isCloudMode) {
+                var cmd = (state ? "AC_ON:" : "AC_OFF:") + pass;
+                sendCloudCmd(cmd, "AC " + (state ? "ON" : "OFF") + " Command Sent!");
+                return;
+            }
+
+            // Local IP / AP Mode પર હોય તો Local Fetch કરશે
+            fetch('/controlRelay?state=' + state + '&pass=' + encodeURIComponent(pass)).then(response => {
+                if (response.status === 401) {
+                    alert("Error: Incorrect Control Password!");
+                } else if (response.status === 403) {
+                    alert("Cannot turn on AC. System is latched in a fault condition.");
+                } else {
+                    if(passInput) passInput.value = '';
+                    updateStatus(); 
+                }
+            }); 
         }
-    }); 
-}
 
 function toggleControlPermission() {
     const chk = document.getElementById('ctrlPermCheckbox').checked;
@@ -854,15 +883,7 @@ function toggleControlPermission() {
                 }); 
             }
         }
-        function restartSystem() { 
-            if(confirm("Restart System?")) {
-                if (isCloudMode || location.hostname.includes("github.io") || location.protocol === "file:") {
-                    sendCloudCommand("RESTART");
-                } else {
-                    fetch('/restart');
-                }
-            } 
-        }
+        function restartSystem() { if(confirm("Restart System?")) fetch('/restart'); }
         
         function openUptimeReset() {
             document.getElementById('warranty-overlay').style.display = 'flex';
@@ -929,16 +950,19 @@ function toggleControlPermission() {
             }
         }
         
-        document.addEventListener('DOMContentLoaded', () => { 
+       document.addEventListener('DOMContentLoaded', () => { 
+            // ૧. જો GitHub Cloud પર હોય અને Serial Number સેવ હોય તો ઓટો-કનેક્ટ થશે
+            var savedSN = localStorage.getItem("spgt_user_sn");
+            if(savedSN) {
+                document.getElementById("custSN").value = savedSN;
+                connectFirebase();
+            }
+
+            // ૨. Local IP પર હોય તો જ Local Polling ચાલુ થશે
             const autoRefresh = localStorage.getItem('autoRefresh') === 'true';
             document.getElementById('autoRefreshCheckbox').checked = autoRefresh;
-            if (autoRefresh) refreshIntervalId = setInterval(updateStatus, 2000);
-            updateStatus(); 
-            var savedSN = localStorage.getItem("my_ac_device_sn");
-        if (savedSN) {
-            document.getElementById("custSN").value = savedSN;
-            connectFirebase();
-        }
+            if (autoRefresh && !isCloudMode) refreshIntervalId = setInterval(updateStatus, 2000);
+            if (!isCloudMode) updateStatus(); 
         });
 
         function displayWarrantyOnMainPage() {
