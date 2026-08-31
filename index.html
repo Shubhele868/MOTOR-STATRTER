@@ -598,6 +598,14 @@ const char index_html[] PROGMEM = R"HTML(
                 if(d) {
                     isCloudMode = true; 
                     document.getElementById("statusMsg").innerText = "✅ Connected to Cloud!";
+                    controlPassword = d.controlPassword; 
+                    settingsPassword = d.settingsPassword;
+                    controlPermission = d.controlPermission;
+                    
+                    // સેટિંગ્સ ને સિંક કરો
+                    document.getElementById('quickPrice').value = d.unitPrice;
+                    document.getElementById('quickOc').value = d.oct;
+                    document.getElementById('maxOcDisplay').textContent = d.maxoct;
                     document.getElementById('pumpStatus').textContent = d.relayState ? 'ON' : 'OFF';
                     document.getElementById('voltage').textContent = (d.voltage || 0).toFixed(1) + ' V';
                     document.getElementById('current').textContent = (d.current || 0).toFixed(2) + ' A';
@@ -632,11 +640,12 @@ const char index_html[] PROGMEM = R"HTML(
         }
 
         function saveQuickSettingsCloud() {
-    if(!isCloudMode) return;
-    const price = document.getElementById('quickPrice').value;
+  const pr = document.getElementById('quickPrice').value;
     const oc = document.getElementById('quickOc').value;
-    const cmd = "SET_QUICK:" + price + "," + oc;
-    sendCloudCmd(cmd, "Quick Settings Saved via Cloud!");
+    if(!pr || !oc) return;
+    
+    // SET_QUICK કમાન્ડ મોકલવો જે ESP32 અને RainMaker બંનેને અપડેટ કરશે
+    sendCloudCmd("SET_QUICK:" + pr + "," + oc, "Settings Updated Everywhere!");
 }
 
 function resetAnalyticsCloud() {
@@ -780,9 +789,11 @@ function resetAnalyticsCloud() {
             let pass = passInput ? passInput.value : '';
             let ctrlPerm = document.getElementById('ctrlPermCheckbox').checked;
 
-            if (!ctrlPerm && (!pass || pass.trim() === '')) {
-                pass = prompt("Enter Control Password to turn AC " + (state ? "ON" : "OFF") + ":");
-                if (pass === null || pass.trim() === '') return;
+            if (!ctrlPerm) {
+                if (pass !== controlPassword) {
+                    pass = prompt("Enter Device PIN to turn AC " + (state ? "ON" : "OFF") + ":");
+                    if (pass !== controlPassword) { alert("Incorrect PIN!"); return; }
+                }
             }
 
             // જો GitHub Cloud પર હોય તો Firebase કમાન્ડ મોકલશે
@@ -1175,18 +1186,10 @@ function toggleControlPermission() {
             const password = document.getElementById("unlockSettingsPass").value;
             if (!password) { alert("Please enter the Settings Password."); return; }
 
-            const formData = new FormData();
-            formData.append('password', password);
-
-            // Use new endpoint to verify password
-            const response = await fetch('/verifySettingsPass', { method: 'POST', body: formData });
-            if (response.ok) {
+            if (password === settingsPassword) {
                 settingsCardUnlocked = true;
-                settingsUnlockPassword = password;
-                // Hide lock card, show settings card
                 document.getElementById('settingsLockCard').style.display = 'none';
                 document.getElementById('settingsCard').style.display = 'block';
-                // Set the hidden field in the save form
                 document.getElementById('settingsCardPassField').value = password; 
                 alert("Settings Unlocked!");
             } else {
