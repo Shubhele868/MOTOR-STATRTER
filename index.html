@@ -424,8 +424,8 @@ const char index_html[] PROGMEM = R"HTML(
                             </div>
                             </div>
                         </div>
-                        <button onclick="saveBillingCycle()" style="background-color: var(--green); margin-top: 8px; padding: 8px; font-size: 0.9rem;">Save Billing Dates</button> 
-                    <button onclick="resetAnalytics()" style="background-color: var(--red); margin-top: 8px; padding: 8px; font-size: 0.9rem;">Reset All Analytics to 0</button>
+                        <button onclick="saveBillingCycle()" style="background-color: var(--green); margin-top: 8px; padding: 8px; font-size: 0.9rem;">Save Billing Dates</button>  
+                    <button onclick="isCloudMode ? resetAnalyticsCloud() : resetAnalytics()" style="background-color: var(--red); margin-top: 8px; padding: 8px; font-size: 0.9rem;">Reset All Analytics to 0</button>
                     <button onclick="saveBillNow()" style="background-color: var(--primary-blue); margin-top: 8px; padding: 8px; font-size: 0.9rem; font-weight: bold;">⚡ Save Current Bill & Start New Month Now</button>
                 </div>
             </div>
@@ -466,8 +466,8 @@ const char index_html[] PROGMEM = R"HTML(
                         <label>Over Current Threshold (A):</label>
                         <input type="number" step="0.1" name="oc" id="quickOc" placeholder="Enter Over Current Limit">
                     </div>
-                    <p style="font-size: 0.9em; color: var(--dark-gray); margin-top: 5px;">Max Limit Allowed: <span id="maxOcDisplay" style="font-weight:bold; color:var(--red);">--</span> A</p>
-                    <button type="submit" class="btn">Save Quick Settings</button>
+                     <p style="font-size: 0.9em; color: var(--dark-gray); margin-top: 5px;">Max Limit Allowed: <span id="maxOcDisplay" style="font-weight:bold; color:var(--red);">--</span> A</p>
+                    <button type="button" onclick="isCloudMode ? saveQuickSettingsCloud() : document.forms[0].submit()" class="btn">Save Quick Settings</button>
                 </form>
             </div>
             <!-- END NEW CARD -->
@@ -596,26 +596,22 @@ const char index_html[] PROGMEM = R"HTML(
             db.ref("devices/" + formattedSN + "/live").on("value", function(snapshot) {
                 var d = snapshot.val();
                 if(d) {
-                    isCloudMode = true;
-                    document.getElementById("statusMsg").innerText = "✅ Device Connected Online!";
-                    document.getElementById("statusMsg").style.color = "#00e676";
-
-                    isRelayOn = d.relayState;
+                    isCloudMode = true; 
+                    document.getElementById("statusMsg").innerText = "✅ Connected to Cloud!";
                     document.getElementById('pumpStatus').textContent = d.relayState ? 'ON' : 'OFF';
                     document.getElementById('voltage').textContent = (d.voltage || 0).toFixed(1) + ' V';
                     document.getElementById('current').textContent = (d.current || 0).toFixed(2) + ' A';
                     document.getElementById('energy').textContent = (d.energy || 0).toFixed(3) + ' kWh';
                     document.getElementById('cost').textContent = (d.cost || 0).toFixed(2) + ' Rs.';
                     document.getElementById('acRuntime').textContent = d.acRuntime || "0h:0m:0s";
-                    document.getElementById('ipAddress').textContent = d.ip || "Cloud Online";
-
-                    document.getElementById('ctrlPermCheckbox').checked = d.controlPermission;
-                    document.getElementById('secureControlDiv').style.display = d.controlPermission ? 'none' : 'block';
-
+                    document.getElementById('mOnTime').textContent = d.monthlyHours || "00:00:00";
                     document.getElementById('mUnits').textContent = (d.monthlyUnits || 0).toFixed(2);
                     document.getElementById('mBill').textContent = '₹ ' + ((d.monthlyUnits || 0) * (d.unitPrice || 1.0)).toFixed(2);
                     document.getElementById('dUsage').textContent = (d.todayUnits || 0).toFixed(2);
                     document.getElementById('lBill').textContent = '₹ ' + (d.lastBill || 0).toFixed(2);
+                    document.getElementById('quickPrice').value = d.unitPrice || 0;
+                    document.getElementById('quickOc').value = d.oct || 0;
+                    document.getElementById('maxOcDisplay').textContent = d.maxoct || 0;
 
                     var isFault = d.protectionStatus && d.protectionStatus.includes("FAULT");
                     var pBox = document.getElementById('protection-box');
@@ -635,6 +631,21 @@ const char index_html[] PROGMEM = R"HTML(
             });
         }
 
+        function saveQuickSettingsCloud() {
+    if(!isCloudMode) return;
+    const price = document.getElementById('quickPrice').value;
+    const oc = document.getElementById('quickOc').value;
+    const cmd = "SET_QUICK:" + price + "," + oc;
+    sendCloudCmd(cmd, "Quick Settings Saved via Cloud!");
+}
+
+function resetAnalyticsCloud() {
+    if(!isCloudMode) return;
+    if(confirm("તમામ એનાલિટિક્સ ઝીરો કરવા છે?")) {
+        sendCloudCmd("RESET_ANALYTICS", "Analytics Reset Command Sent!");
+    }
+}
+ 
         function sendCloudCmd(cmd, msg) {
             if(!formattedSN) { alert("પહેલા Serial Number નાખી Connect Device કરો!"); return; }
             db.ref("devices/" + formattedSN + "/commands").set(cmd).then(() => {
