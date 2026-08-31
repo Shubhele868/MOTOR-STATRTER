@@ -467,7 +467,7 @@ const char index_html[] PROGMEM = R"HTML(
                         <input type="number" step="0.1" name="oc" id="quickOc" placeholder="Enter Over Current Limit">
                     </div>
                     <p style="font-size: 0.9em; color: var(--dark-gray); margin-top: 5px;">Max Limit Allowed: <span id="maxOcDisplay" style="font-weight:bold; color:var(--red);">--</span> A</p>
-                    <button type="button" onclick="saveQuickSettingsFromWeb()" class="btn">Save Quick Settings</button>
+                     <button type="button" onclick="saveQuickSettingsFromWeb()" class="btn">Save Quick Settings (Cloud)</button><button type="button" onclick="saveQuickSettingsFromWeb()" class="btn">Save Quick Settings</button>
                 </form>
             </div>
             <!-- END NEW CARD -->
@@ -643,6 +643,7 @@ const char index_html[] PROGMEM = R"HTML(
                 alert("✅ " + msg);
             }).catch(err => { alert("Error: " + err.message); });
         }
+        
         function saveQuickSettingsFromWeb() {
     let newOc = document.getElementById("quickOc").value;
     let newPrice = document.getElementById("quickPrice").value;
@@ -653,7 +654,13 @@ const char index_html[] PROGMEM = R"HTML(
         if(confirm("શું તમે નવી લિમિટ (OC: " + newOc + "A) ક્લાઉડ પર સેવ કરવા માંગો છો?")) {
             // Firebase માં OCT કમાન્ડ મોકલો
             db.ref("devices/" + formattedSN + "/commands").set("SET_OCT:" + newOc);
-            alert("સેટિંગ્સ બદલવા માટેનો કમાન્ડ Firebase પર મોકલી દીધો છે!");
+            
+            // જો પ્રાઈસ પણ બદલવી હોય તો ૧.૫ સેકન્ડ પછી બીજો કમાન્ડ જશે
+            setTimeout(() => {
+                db.ref("devices/" + formattedSN + "/commands").set("SET_PRICE:" + newPrice);
+            }, 1500);
+
+            alert("સેટિંગ્સ બદલવા માટેના કમાન્ડ Firebase પર મોકલી દીધા છે!");
         }
     } else {
         // ૨. જો લોકલ WiFi મોડમાં હોય તો સીધું ESP32 ને મોકલો
@@ -666,6 +673,7 @@ const char index_html[] PROGMEM = R"HTML(
         }
     }
 }
+   
         let refreshIntervalId = null;
         let lastAlertState = null;
         let currentPassword = null; 
