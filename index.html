@@ -424,8 +424,8 @@ const char index_html[] PROGMEM = R"HTML(
                             </div>
                             </div>
                         </div>
-                        <button onclick="saveBillingCycle()" style="background-color: var(--green); margin-top: 8px; padding: 8px; font-size: 0.9rem;">Save Billing Dates</button>  
-                    <button onclick="isCloudMode ? resetAnalyticsCloud() : resetAnalytics()" style="background-color: var(--red); margin-top: 8px; padding: 8px; font-size: 0.9rem;">Reset All Analytics to 0</button>
+                        <button onclick="saveBillingCycle()" style="background-color: var(--green); margin-top: 8px; padding: 8px; font-size: 0.9rem;">Save Billing Dates</button> 
+                    <button onclick="resetAnalytics()" style="background-color: var(--red); margin-top: 8px; padding: 8px; font-size: 0.9rem;">Reset All Analytics to 0</button>
                     <button onclick="saveBillNow()" style="background-color: var(--primary-blue); margin-top: 8px; padding: 8px; font-size: 0.9rem; font-weight: bold;">⚡ Save Current Bill & Start New Month Now</button>
                 </div>
             </div>
@@ -466,8 +466,8 @@ const char index_html[] PROGMEM = R"HTML(
                         <label>Over Current Threshold (A):</label>
                         <input type="number" step="0.1" name="oc" id="quickOc" placeholder="Enter Over Current Limit">
                     </div>
-                     <p style="font-size: 0.9em; color: var(--dark-gray); margin-top: 5px;">Max Limit Allowed: <span id="maxOcDisplay" style="font-weight:bold; color:var(--red);">--</span> A</p>
-                    <button type="button" onclick="isCloudMode ? saveQuickSettingsCloud() : document.forms[0].submit()" class="btn">Save Quick Settings</button>
+                    <p style="font-size: 0.9em; color: var(--dark-gray); margin-top: 5px;">Max Limit Allowed: <span id="maxOcDisplay" style="font-weight:bold; color:var(--red);">--</span> A</p>
+                    <button type="button" onclick="saveQuickSettingsFromWeb()" class="btn">Save Quick Settings</button>
                 </form>
             </div>
             <!-- END NEW CARD -->
@@ -596,30 +596,28 @@ const char index_html[] PROGMEM = R"HTML(
             db.ref("devices/" + formattedSN + "/live").on("value", function(snapshot) {
                 var d = snapshot.val();
                 if(d) {
-                    isCloudMode = true; 
-                    document.getElementById("statusMsg").innerText = "✅ Connected to Cloud!";
-                    controlPassword = d.controlPassword; 
-                    settingsPassword = d.settingsPassword;
-                    controlPermission = d.controlPermission;
-                    
-                    // સેટિંગ્સ ને સિંક કરો
-                    document.getElementById('quickPrice').value = d.unitPrice;
-                    document.getElementById('quickOc').value = d.oct;
-                    document.getElementById('maxOcDisplay').textContent = d.maxoct;
+                    isCloudMode = true;
+                    window.deviceCtrlPass = d.ctrlPass; // ESP32 માંથી પાસવર્ડ રીડ કરશે
+                    window.deviceSetPass = d.setPass;
+                    document.getElementById("statusMsg").innerText = "✅ Device Connected Online!";
+                    document.getElementById("statusMsg").style.color = "#00e676";
+
+                    isRelayOn = d.relayState;
                     document.getElementById('pumpStatus').textContent = d.relayState ? 'ON' : 'OFF';
                     document.getElementById('voltage').textContent = (d.voltage || 0).toFixed(1) + ' V';
                     document.getElementById('current').textContent = (d.current || 0).toFixed(2) + ' A';
                     document.getElementById('energy').textContent = (d.energy || 0).toFixed(3) + ' kWh';
                     document.getElementById('cost').textContent = (d.cost || 0).toFixed(2) + ' Rs.';
                     document.getElementById('acRuntime').textContent = d.acRuntime || "0h:0m:0s";
-                    document.getElementById('mOnTime').textContent = d.monthlyHours || "00:00:00";
+                    document.getElementById('ipAddress').textContent = d.ip || "Cloud Online";
+
+                    document.getElementById('ctrlPermCheckbox').checked = d.controlPermission;
+                    document.getElementById('secureControlDiv').style.display = d.controlPermission ? 'none' : 'block';
+
                     document.getElementById('mUnits').textContent = (d.monthlyUnits || 0).toFixed(2);
                     document.getElementById('mBill').textContent = '₹ ' + ((d.monthlyUnits || 0) * (d.unitPrice || 1.0)).toFixed(2);
                     document.getElementById('dUsage').textContent = (d.todayUnits || 0).toFixed(2);
                     document.getElementById('lBill').textContent = '₹ ' + (d.lastBill || 0).toFixed(2);
-                    document.getElementById('quickPrice').value = d.unitPrice || 0;
-                    document.getElementById('quickOc').value = d.oct || 0;
-                    document.getElementById('maxOcDisplay').textContent = d.maxoct || 0;
 
                     var isFault = d.protectionStatus && d.protectionStatus.includes("FAULT");
                     var pBox = document.getElementById('protection-box');
@@ -639,28 +637,35 @@ const char index_html[] PROGMEM = R"HTML(
             });
         }
 
-        function saveQuickSettingsCloud() {
-  const pr = document.getElementById('quickPrice').value;
-    const oc = document.getElementById('quickOc').value;
-    if(!pr || !oc) return;
-    
-    // SET_QUICK કમાન્ડ મોકલવો જે ESP32 અને RainMaker બંનેને અપડેટ કરશે
-    sendCloudCmd("SET_QUICK:" + pr + "," + oc, "Settings Updated Everywhere!");
-}
-
-function resetAnalyticsCloud() {
-    if(!isCloudMode) return;
-    if(confirm("તમામ એનાલિટિક્સ ઝીરો કરવા છે?")) {
-        sendCloudCmd("RESET_ANALYTICS", "Analytics Reset Command Sent!");
-    }
-}
- 
         function sendCloudCmd(cmd, msg) {
             if(!formattedSN) { alert("પહેલા Serial Number નાખી Connect Device કરો!"); return; }
             db.ref("devices/" + formattedSN + "/commands").set(cmd).then(() => {
                 alert("✅ " + msg);
             }).catch(err => { alert("Error: " + err.message); });
         }
+        function saveQuickSettingsFromWeb() {
+    let newOc = document.getElementById("quickOc").value;
+    let newPrice = document.getElementById("quickPrice").value;
+
+    if (isCloudMode) {
+        // ૧. જો ક્લાઉડ મોડ (Online) માં હોય તો Firebase દ્વારા કમાન્ડ મોકલો
+        if(!formattedSN) { alert("પહેલા Serial Number નાખી Connect કરો!"); return; }
+        if(confirm("શું તમે નવી લિમિટ (OC: " + newOc + "A) ક્લાઉડ પર સેવ કરવા માંગો છો?")) {
+            // Firebase માં OCT કમાન્ડ મોકલો
+            db.ref("devices/" + formattedSN + "/commands").set("SET_OCT:" + newOc);
+            alert("સેટિંગ્સ બદલવા માટેનો કમાન્ડ Firebase પર મોકલી દીધો છે!");
+        }
+    } else {
+        // ૨. જો લોકલ WiFi મોડમાં હોય તો સીધું ESP32 ને મોકલો
+        if(confirm("શું તમે આ સેટિંગ્સ લોકલ ડિવાઇસમાં સેવ કરવા માંગો છો?")) {
+            fetch('/savequicksettings?oc=' + newOc + '&price=' + newPrice).then(r => {
+                if(r.ok) alert("Settings Saved Locally!");
+                else alert("Error saving locally!");
+                updateStatus();
+            });
+        }
+    }
+}
         let refreshIntervalId = null;
         let lastAlertState = null;
         let currentPassword = null; 
@@ -789,32 +794,24 @@ function resetAnalyticsCloud() {
             let pass = passInput ? passInput.value : '';
             let ctrlPerm = document.getElementById('ctrlPermCheckbox').checked;
 
-            if (!ctrlPerm) {
-                if (pass !== controlPassword) {
-                    pass = prompt("Enter Device PIN to turn AC " + (state ? "ON" : "OFF") + ":");
-                    if (pass !== controlPassword) { alert("Incorrect PIN!"); return; }
-                }
-            }
+             // જો Permission બંધ હોય અને ઇનપુટમાં પાસવર્ડ ના હોય તો જ Prompt પૂછશે
+    if (!ctrlPerm && pass.trim() === '') {
+        pass = prompt("AC " + (state ? "ON" : "OFF") + " કરવા માટે કંટ્રોલ પાસવર્ડ નાખો:");
+        if (pass === null || pass === "") return;
+    }
 
-            // જો GitHub Cloud પર હોય તો Firebase કમાન્ડ મોકલશે
-            if (isCloudMode) {
-                var cmd = (state ? "AC_ON:" : "AC_OFF:") + pass;
-                sendCloudCmd(cmd, "AC " + (state ? "ON" : "OFF") + " Command Sent!");
-                return;
-            }
+    if (isCloudMode) {
+        var cmd = (state ? "AC_ON:" : "AC_OFF:") + pass;
+        sendCloudCmd(cmd, "AC " + (state ? "ON" : "OFF") + " Command Sent!");
+        return;
+    }
 
-            // Local IP / AP Mode પર હોય તો Local Fetch કરશે
-            fetch('/controlRelay?state=' + state + '&pass=' + encodeURIComponent(pass)).then(response => {
-                if (response.status === 401) {
-                    alert("Error: Incorrect Control Password!");
-                } else if (response.status === 403) {
-                    alert("Cannot turn on AC. System is latched in a fault condition.");
-                } else {
-                    if(passInput) passInput.value = '';
-                    updateStatus(); 
-                }
-            }); 
-        }
+    fetch('/controlRelay?state=' + state + '&pass=' + encodeURIComponent(pass)).then(response => {
+        if (response.status === 401) alert("Error: Incorrect Control Password!");
+        else if (response.status === 403) alert("Cannot turn on AC. System is latched in a fault condition.");
+        else { if(passInput) passInput.value = ''; updateStatus(); }
+    }); 
+}
 
 function toggleControlPermission() {
     const chk = document.getElementById('ctrlPermCheckbox').checked;
@@ -1186,10 +1183,18 @@ function toggleControlPermission() {
             const password = document.getElementById("unlockSettingsPass").value;
             if (!password) { alert("Please enter the Settings Password."); return; }
 
-            if (password === settingsPassword) {
+            const formData = new FormData();
+            formData.append('password', password);
+
+            // Use new endpoint to verify password
+            const response = await fetch('/verifySettingsPass', { method: 'POST', body: formData });
+            if (response.ok) {
                 settingsCardUnlocked = true;
+                settingsUnlockPassword = password;
+                // Hide lock card, show settings card
                 document.getElementById('settingsLockCard').style.display = 'none';
                 document.getElementById('settingsCard').style.display = 'block';
+                // Set the hidden field in the save form
                 document.getElementById('settingsCardPassField').value = password; 
                 alert("Settings Unlocked!");
             } else {
