@@ -697,7 +697,8 @@
                     document.getElementById('lBill').textContent = '₹ ' + (data.lBill || 0).toFixed(2);
                     if(data.b_start) document.getElementById('billStartDate').value = data.b_start;
                     if(data.b_end) document.getElementById('billEndDate').value = data.b_end;
-
+                    if(data.b_etime) document.getElementById('billEndTime').value = data.b_etime;
+                    if(data.b_eampm) document.getElementById('billEndAmpm').value = data.b_eampm;
                     // ૫. સેટિંગ્સ ડિફોલ્ટ વેલ્યુ લોડિંગ
                     document.getElementById('quickPrice').value = data.unitPrice || 1.0;
                     document.getElementById('quickOc').value = data.oct || 10.0;
@@ -736,9 +737,20 @@
         function resetAcRuntime() { if(confirm("Reset Runtime?")) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'reset_runtime' }); }
         function resetAnalytics() { if(confirm("Reset Analytics?")) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'reset_analytics' }); }
         function saveBillNow() { if(confirm("Save Bill Now?")) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'save_bill_now' }); }
-        function saveBillingCycle() {
-            const s = document.getElementById('billStartDate').value, e = document.getElementById('billEndDate').value;
-            if(activeSerial) { rtdb.ref('/devices/' + activeSerial + '/control').update({ b_start: s, b_end: e }); alert("તારીખો સેવ થઈ!"); }
+          function saveBillingCycle() {
+            const s = document.getElementById('billStartDate').value;
+            const e = document.getElementById('billEndDate').value;
+            const tm = document.getElementById('billEndTime').value;
+            const ampm = document.getElementById('billEndAmpm').value;
+            if(activeSerial) { 
+                rtdb.ref('/devices/' + activeSerial + '/control').update({ 
+                    b_start: s, 
+                    b_end: e,
+                    b_etime: tm,
+                    b_eampm: ampm
+                }); 
+                alert("Billing Dates અને Time (AM/PM) સેવ થઈ ગયા!"); 
+            }
         }
         // Quick Settings Save
         document.querySelector('form[action="/savequicksettings"]').onsubmit = function(e) {
