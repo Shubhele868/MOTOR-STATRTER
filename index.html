@@ -1,11 +1,12 @@
-const char index_html[] PROGMEM = R"HTML(
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <!-- Firebase Realtime Database SDK (GitHub Hosting માટે) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <title>SPGT Power Controller</title>
     <style>
         :root { 
@@ -244,16 +245,17 @@ const char index_html[] PROGMEM = R"HTML(
                     <div class="subtitle-logo">Global Technologies</div>
                     <div class="line"></div>
                 </div>
-            </div>
+              </div>
             <p class="model-info">SPGT Power Controller</p>
         </header>
-         <!-- 🔢 ૧ લાખ ગ્રાહકો માટે સીરીયલ નંબર નાખવાનું બોક્સ -->
-        <div style="background: #081a2e; border: 2px solid #00e676; border-radius: 12px; padding: 15px; margin-bottom: 20px; text-align: center;">
-            <span style="color:#00e676; font-weight:bold; font-size:1.1em; display:block; margin-bottom:8px;">🔢 ENTER DEVICE SERIAL NUMBER:</span>
-            <input type="text" id="custSN" placeholder="e.g. SN: SE-SG-X1-5DDAF380" style="width:85%; max-width:380px; padding:10px; border-radius:8px; border:2px solid #00bfff; background:#1d2b3a; color:#fff; font-size:1.1em; text-align:center; font-weight:bold;">
-            <br>
-            <button onclick="connectFirebase()" class="btn" style="width:auto; margin-top:10px; background:linear-gradient(145deg, #00e676, #00a152);">⚡ Connect Live Device</button>
-            <div id="statusMsg" style="margin-top:6px; font-weight:bold; color:#ffd600;"></div>
+
+        <!-- 5 ડિવાઇસ સિલેક્ટ કરવા અને નવો સિરિયલ નંબર એડ કરવાનું બાર -->
+        <div style="background:#0f1218; padding:15px; border-radius:10px; margin-bottom:20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:center; box-shadow:0 4px 15px rgba(0,0,0,0.4);">
+            <span style="color:#00ffcc; font-weight:bold;">Select Device:</span>
+            <select id="deviceSelector" onchange="switchDevice()" style="padding:8px 12px; border-radius:6px; background:#1c2541; color:#fff; border:1px solid #007bff; font-weight:bold; min-width:160px;"></select>
+            <input type="text" id="newSerialInput" placeholder="Add Serial No (SPGT-...)" style="width:200px; padding:8px 10px; border-radius:6px; border:1px solid #ced4da;">
+            <button onclick="addNewDeviceSerial()" style="width:auto; margin:0; padding:8px 15px; background:var(--green);">+ Add Device</button> 
+          <button onclick="removeCurrentDevice()" style="width:auto; margin:0; padding:8px 12px; background:var(--red);">Delete</button>
         </div>
         <main class="content">
             <div class="card">
@@ -467,7 +469,7 @@ const char index_html[] PROGMEM = R"HTML(
                         <input type="number" step="0.1" name="oc" id="quickOc" placeholder="Enter Over Current Limit">
                     </div>
                     <p style="font-size: 0.9em; color: var(--dark-gray); margin-top: 5px;">Max Limit Allowed: <span id="maxOcDisplay" style="font-weight:bold; color:var(--red);">--</span> A</p>
-                     <button type="button" onclick="saveQuickSettingsFromWeb()" class="btn">Save Quick Settings (Cloud)</button><button type="button" onclick="saveQuickSettingsFromWeb()" class="btn">Save Quick Settings</button>
+                    <button type="submit" class="btn">Save Quick Settings</button>
                 </form>
             </div>
             <!-- END NEW CARD -->
@@ -571,109 +573,102 @@ const char index_html[] PROGMEM = R"HTML(
             <div class="input-group"><label>New Password:</label><input type="password" id="newPassword" placeholder="Enter new password"></div>
             <button class="btn-warranty" onclick="changePassword()">Update Password</button>
             <button class="btn-warranty-danger" onclick="cancelForm()" style="margin-top: 10px;">Cancel</button>
-        </div>
+       </div>
     </div>
 
     <script>
-    // 🌐 FIREBASE REALTIME CLOUD CONNECTION ENGINE
+        // Firebase કન્ફિગરેશન (તમારો Database URL અહીં મૂકવો)
         const firebaseConfig = {
             databaseURL: "https://motor-starter-425de-default-rtdb.asia-southeast1.firebasedatabase.app"
         };
         if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
-        const db = firebase.database();
+        const rtdb = firebase.database();
 
-        let formattedSN = "";
-        let isCloudMode = false;
+        // ૫ ડિવાઇસ કંટ્રોલ મેનેજમેન્ટ લોજિક
+        let myDeviceList = JSON.parse(localStorage.getItem('spgt_devices') || '[]');
+        let activeSerial = localStorage.getItem('spgt_active_serial') || '';
 
-        function connectFirebase() {
-            var sn = document.getElementById("custSN").value.trim();
-            if(!sn) { alert("કૃપા કરીને Device Serial Number દાખલ કરો!"); return; }
-            localStorage.setItem("spgt_user_sn", sn);
+        function updateDeviceDropdown() {
+            const sel = document.getElementById('deviceSelector');
+            if(!sel) return;
+            sel.innerHTML = '';
+            if(myDeviceList.length === 0) {
+                sel.innerHTML = '<option value="">-- No Device Added --</option>';
+                return;
+            }
+            myDeviceList.forEach(sn => {
+                let opt = document.createElement('option');
+                opt.value = sn;
+                opt.textContent = sn;
+                if(sn === activeSerial) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        }
 
-            formattedSN = sn.replace(/ /g, "_").replace(/:/g, "_");
-            document.getElementById("statusMsg").innerText = "Connecting to " + sn + "...";
+        function addNewDeviceSerial() {
+            const input = document.getElementById('newSerialInput');
+            const sn = input.value.trim().toUpperCase();
+            if(!sn) { alert('કૃપા કરીને Serial Number દાખલ કરો!'); return; }
+            if(!myDeviceList.includes(sn)) {
+                myDeviceList.push(sn);
+                localStorage.setItem('spgt_devices', JSON.stringify(myDeviceList));
+                activeSerial = sn;
+                localStorage.setItem('spgt_active_serial', activeSerial);
+                input.value = '';
+                updateDeviceDropdown();
+                listenToActiveDevice();
+                alert('ડિવાઇસ સફળતાપૂર્વક ઉમેરાઈ ગયું!');
+            } else {
+                alert('આ ડિવાઇસ પહેલેથી લિસ્ટમાં છે!');
+            }
+        }
 
-            db.ref("devices/" + formattedSN + "/live").on("value", function(snapshot) {
-                var d = snapshot.val();
-                if(d) {
-                    isCloudMode = true;
-                    window.deviceCtrlPass = d.ctrlPass; // ESP32 માંથી પાસવર્ડ રીડ કરશે
-                    window.deviceSetPass = d.setPass;
-                    document.getElementById("statusMsg").innerText = "✅ Device Connected Online!";
-                    document.getElementById("statusMsg").style.color = "#00e676";
+        function removeCurrentDevice() {
+            if(!activeSerial) return;
+            if(confirm('શું તમે આ ડિવાઇસ (' + activeSerial + ') કાઢી નાખવા માંગો છો?')) {
+                myDeviceList = myDeviceList.filter(d => d !== activeSerial);
+                localStorage.setItem('spgt_devices', JSON.stringify(myDeviceList));
+                activeSerial = myDeviceList.length > 0 ? myDeviceList[0] : '';
+                localStorage.setItem('spgt_active_serial', activeSerial);
+                updateDeviceDropdown();
+                listenToActiveDevice();
+            }
+        }
 
-                    isRelayOn = d.relayState;
-                    document.getElementById('pumpStatus').textContent = d.relayState ? 'ON' : 'OFF';
-                    document.getElementById('voltage').textContent = (d.voltage || 0).toFixed(1) + ' V';
-                    document.getElementById('current').textContent = (d.current || 0).toFixed(2) + ' A';
-                    document.getElementById('energy').textContent = (d.energy || 0).toFixed(3) + ' kWh';
-                    document.getElementById('cost').textContent = (d.cost || 0).toFixed(2) + ' Rs.';
-                    document.getElementById('acRuntime').textContent = d.acRuntime || "0h:0m:0s";
-                    document.getElementById('ipAddress').textContent = d.ip || "Cloud Online";
+        function switchDevice() {
+            activeSerial = document.getElementById('deviceSelector').value;
+            localStorage.setItem('spgt_active_serial', activeSerial);
+            listenToActiveDevice();
+        }
 
-                    document.getElementById('ctrlPermCheckbox').checked = d.controlPermission;
-                    document.getElementById('secureControlDiv').style.display = d.controlPermission ? 'none' : 'block';
-
-                    document.getElementById('mUnits').textContent = (d.monthlyUnits || 0).toFixed(2);
-                    document.getElementById('mBill').textContent = '₹ ' + ((d.monthlyUnits || 0) * (d.unitPrice || 1.0)).toFixed(2);
-                    document.getElementById('dUsage').textContent = (d.todayUnits || 0).toFixed(2);
-                    document.getElementById('lBill').textContent = '₹ ' + (d.lastBill || 0).toFixed(2);
-
-                    var isFault = d.protectionStatus && d.protectionStatus.includes("FAULT");
-                    var pBox = document.getElementById('protection-box');
-                    pBox.textContent = d.protectionStatus || "System Operating Normally";
-                    pBox.className = 'protection-msg ' + (isFault ? 'alert' : 'normal');
-
+        // રીયલ-ટાઇમ લિસનર (ડેટા Overwrite થઈને આવશે, મેમરી ક્યારેય ફુલ નહીં થાય)
+        let currentFbRef = null;
+        function listenToActiveDevice() {
+            if(currentFbRef) currentFbRef.off();
+            if(!activeSerial) return;
+            currentFbRef = rtdb.ref('/devices/' + activeSerial + '/status');
+            currentFbRef.on('value', snapshot => {
+                const data = snapshot.val();
+                if(data) {
+                    // Firebase પરથી આવતા લાઈવ ડેટાને સ્ક્રીન પર અપડેટ કરવો
+                    document.getElementById('voltage').textContent = (data.voltage || 0).toFixed(1) + ' V';
+                    document.getElementById('current').textContent = (data.current || 0).toFixed(2) + ' A';
+                    document.getElementById('energy').textContent = (data.energy || 0).toFixed(3) + ' kWh';
+                    document.getElementById('pumpStatus').textContent = data.relayState ? 'ON' : 'OFF';
+                    isRelayOn = data.relayState;
                     document.getElementById('pumpOnBtn').style.backgroundColor = isRelayOn ? 'var(--primary-blue)' : 'var(--green)';
-                    document.getElementById('pumpOffBtn').style.backgroundColor = !isRelayOn ? 'var(--primary-blue)' : 'var(--red)';
-
-                    document.getElementById('ovValue').textContent = (d.voltage || 0).toFixed(1) + ' V';
-                    document.getElementById('uvValue').textContent = (d.voltage || 0).toFixed(1) + ' V';
-                    document.getElementById('ocValue').textContent = (d.current || 0).toFixed(2) + ' A';
-                } else {
-                    document.getElementById("statusMsg").innerText = "⚠️ Device Offline or Serial Number Not Found.";
-                    document.getElementById("statusMsg").style.color = "#ff1744";
-                }
+                document.getElementById('pumpOffBtn').style.backgroundColor = !isRelayOn ? 'var(--primary-blue)' : 'var(--red)';
+                    if(document.getElementById('cost')) {
+                        document.getElementById('cost').textContent = (data.cost || 0).toFixed(2) + ' Rs.';
+                    }
+                    if(data.protectionMsg) {
+                        const pBox = document.getElementById('protection-box');
+                        pBox.textContent = data.protectionMsg;
+                        pBox.className = 'protection-msg ' + (data.protectionMsg.includes('FAULT') ? 'alert' : 'normal');
+                    }
+                   }
             });
         }
-
-        function sendCloudCmd(cmd, msg) {
-            if(!formattedSN) { alert("પહેલા Serial Number નાખી Connect Device કરો!"); return; }
-            db.ref("devices/" + formattedSN + "/commands").set(cmd).then(() => {
-                alert("✅ " + msg);
-            }).catch(err => { alert("Error: " + err.message); });
-        }
-        
-        function saveQuickSettingsFromWeb() {
-    let newOc = document.getElementById("quickOc").value;
-    let newPrice = document.getElementById("quickPrice").value;
-
-    if (isCloudMode) {
-        // ૧. જો ક્લાઉડ મોડ (Online) માં હોય તો Firebase દ્વારા કમાન્ડ મોકલો
-        if(!formattedSN) { alert("પહેલા Serial Number નાખી Connect કરો!"); return; }
-        if(confirm("શું તમે નવી લિમિટ (OC: " + newOc + "A) ક્લાઉડ પર સેવ કરવા માંગો છો?")) {
-            // Firebase માં OCT કમાન્ડ મોકલો
-            db.ref("devices/" + formattedSN + "/commands").set("SET_OCT:" + newOc);
-            
-            // જો પ્રાઈસ પણ બદલવી હોય તો ૧.૫ સેકન્ડ પછી બીજો કમાન્ડ જશે
-            setTimeout(() => {
-                db.ref("devices/" + formattedSN + "/commands").set("SET_PRICE:" + newPrice);
-            }, 1500);
-
-            alert("સેટિંગ્સ બદલવા માટેના કમાન્ડ Firebase પર મોકલી દીધા છે!");
-        }
-    } else {
-        // ૨. જો લોકલ WiFi મોડમાં હોય તો સીધું ESP32 ને મોકલો
-        if(confirm("શું તમે આ સેટિંગ્સ લોકલ ડિવાઇસમાં સેવ કરવા માંગો છો?")) {
-            fetch('/savequicksettings?oc=' + newOc + '&price=' + newPrice).then(r => {
-                if(r.ok) alert("Settings Saved Locally!");
-                else alert("Error saving locally!");
-                updateStatus();
-            });
-        }
-    }
-}
-   
         let refreshIntervalId = null;
         let lastAlertState = null;
         let currentPassword = null; 
@@ -684,6 +679,9 @@ const char index_html[] PROGMEM = R"HTML(
         let settingsUnlockPassword = '';  // NEW: Store password for saving
 
         function updateStatus() {
+           if (location.hostname !== "localhost" && location.hostname !== "127.0.0.1" && !location.hostname.startsWith("192.168.")) {
+                return;
+            }
             fetch('/status').then(r => r.json()).then(data => {
                 isRelayOn = data.relayState;
                 document.getElementById('pumpStatus').textContent = data.relayState ? 'ON' : 'OFF';
@@ -772,52 +770,30 @@ const char index_html[] PROGMEM = R"HTML(
                 displayWarrantyOnMainPage();
             });
         }
-        function resetEnergyCost() { 
-            if(confirm("Are you sure you want to reset Energy & Cost?")) { 
-                if(isCloudMode) {
-                    sendCloudCmd('RESET_ENERGY', 'Energy Reset Command Sent to Cloud!');
-                    return;
-                }
-                fetch('/resetenergy').then(updateStatus); 
-            } 
-        }
-
-        function restartSystem() { 
-            if(confirm("Restart System?")) {
-                if(isCloudMode) {
-                    sendCloudCmd('RESTART', 'Restart Command Sent to Cloud!');
-                    return;
-                }
-                fetch('/restart'); 
-            }
-        }
+        function resetEnergyCost() { if(confirm("Are you sure?")) { fetch('/resetenergy').then(updateStatus); } }
         function resetAcRuntime() { if(confirm("Are you sure you want to reset AC Runtime?")) { fetch('/resetruntime').then(updateStatus); } }
         function updateProtectionValue(id, val, trig) { const el = document.getElementById(id); el.textContent = val; el.classList.toggle('triggered', trig); }
         function updateProtectionIndicator(ledId, itemId, isActive) { document.getElementById(ledId).className = `indicator ${isActive ? 'high' : 'low'}`; document.getElementById(itemId).classList.toggle('protection-active', isActive); }
         function checkProtectionAlerts(data) { const isProt = data.protectionMessage.includes('FAULT'); if (isProt && lastAlertState !== data.protectionMessage) { document.getElementById('alertMessage').textContent = data.protectionMessage; document.getElementById('fullPageAlert').style.display = 'flex'; } lastAlertState = isProt ? data.protectionMessage : null; }
         function toggleAutoRefresh() { const chk = document.getElementById('autoRefreshCheckbox'); if (chk.checked) { refreshIntervalId = setInterval(updateStatus, 2000); } else { clearInterval(refreshIntervalId); } localStorage.setItem('autoRefresh', chk.checked); }
-        
         function controlRelay(state) { 
-            let passInput = document.getElementById('ctrlPasswordInput');
-            let pass = passInput ? passInput.value : '';
-            let ctrlPerm = document.getElementById('ctrlPermCheckbox').checked;
-
-             // જો Permission બંધ હોય અને ઇનપુટમાં પાસવર્ડ ના હોય તો જ Prompt પૂછશે
-    if (!ctrlPerm && pass.trim() === '') {
-        pass = prompt("AC " + (state ? "ON" : "OFF") + " કરવા માટે કંટ્રોલ પાસવર્ડ નાખો:");
-        if (pass === null || pass === "") return;
-    }
-
-    if (isCloudMode) {
-        var cmd = (state ? "AC_ON:" : "AC_OFF:") + pass;
-        sendCloudCmd(cmd, "AC " + (state ? "ON" : "OFF") + " Command Sent!");
-        return;
-    }
-
+            // Manual ON command also acts as a "reset" for a latched fault
+            if(activeSerial) {
+                rtdb.ref('/devices/' + activeSerial + '/control/relay').set(state === 1);
+            }
+           const pass = document.getElementById('ctrlPasswordInput').value;
+           if (location.hostname !== "localhost" && location.hostname !== "127.0.0.1" && !location.hostname.startsWith("192.168.")) {
+                return; // GitHub Pages પર બિનજરૂરી fetch એરર રોકવા માટે
+            }
     fetch('/controlRelay?state=' + state + '&pass=' + encodeURIComponent(pass)).then(response => {
-        if (response.status === 401) alert("Error: Incorrect Control Password!");
-        else if (response.status === 403) alert("Cannot turn on AC. System is latched in a fault condition.");
-        else { if(passInput) passInput.value = ''; updateStatus(); }
+        if (response.status === 401) {
+            alert("Error: Incorrect Control Password!");
+        } else if (response.status === 403) {
+            alert("Cannot turn on AC. System is latched in a fault condition.");
+        } else {
+            document.getElementById('ctrlPasswordInput').value = '';
+            updateStatus(); 
+        }
     }); 
 }
 
@@ -965,8 +941,8 @@ function toggleControlPermission() {
             const pass = document.getElementById('uptimePasswordInput').value;
             if (pass) {
                 const response = await fetch(`/resetuptime?pass=${encodeURIComponent(pass)}`);
-                if (response.ok) {
-                    alert("Uptime reset successfully!");
+                if (response.ok) { 
+              alert("Uptime reset successfully!");
                     closeOverlays();
                     updateStatus();
                 } else {
@@ -976,20 +952,21 @@ function toggleControlPermission() {
                 alert("Please enter the password.");
             }
         }
-        
-       document.addEventListener('DOMContentLoaded', () => { 
-            // ૧. જો GitHub Cloud પર હોય અને Serial Number સેવ હોય તો ઓટો-કનેક્ટ થશે
-            var savedSN = localStorage.getItem("spgt_user_sn");
-            if(savedSN) {
-                document.getElementById("custSN").value = savedSN;
-                connectFirebase();
-            }
 
-            // ૨. Local IP પર હોય તો જ Local Polling ચાલુ થશે
+        // બ્રાઉઝર ઓપન થતાં જ ડિવાઇસ લિસ્ટ તૈયાર કરી Firebase લિસનર ચાલુ કરવું
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDeviceDropdown();
+            if(myDeviceList.length > 0) {
+                if(!activeSerial) activeSerial = myDeviceList[0];
+                listenToActiveDevice();
+            }
+        });
+        
+        document.addEventListener('DOMContentLoaded', () => { 
             const autoRefresh = localStorage.getItem('autoRefresh') === 'true';
             document.getElementById('autoRefreshCheckbox').checked = autoRefresh;
-            if (autoRefresh && !isCloudMode) refreshIntervalId = setInterval(updateStatus, 2000);
-            if (!isCloudMode) updateStatus(); 
+            if (autoRefresh) refreshIntervalId = setInterval(updateStatus, 2000);
+            updateStatus(); 
         });
 
         function displayWarrantyOnMainPage() {
@@ -1230,4 +1207,3 @@ function toggleControlPermission() {
     </script>
 </body>
 </html>
-)HTML";
