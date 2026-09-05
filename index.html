@@ -642,33 +642,136 @@
         }
 
         // રીયલ-ટાઇમ લિસનર (ડેટા Overwrite થઈને આવશે, મેમરી ક્યારેય ફુલ નહીં થાય)
-        let currentFbRef = null;
+        let currentFbRef = null; 
         function listenToActiveDevice() {
             if(currentFbRef) currentFbRef.off();
-            if(!activeSerial) return;
+            if(!activeSerial) return; 
             currentFbRef = rtdb.ref('/devices/' + activeSerial + '/status');
             currentFbRef.on('value', snapshot => {
                 const data = snapshot.val();
                 if(data) {
-                    // Firebase પરથી આવતા લાઈવ ડેટાને સ્ક્રીન પર અપડેટ કરવો
+                    // ૧. સ્ટેટસ અને રનટાઇમ
                     document.getElementById('voltage').textContent = (data.voltage || 0).toFixed(1) + ' V';
                     document.getElementById('current').textContent = (data.current || 0).toFixed(2) + ' A';
                     document.getElementById('energy').textContent = (data.energy || 0).toFixed(3) + ' kWh';
+                    document.getElementById('cost').textContent = (data.cost || 0).toFixed(2) + ' Rs.';
                     document.getElementById('pumpStatus').textContent = data.relayState ? 'ON' : 'OFF';
+                    document.getElementById('acRuntime').textContent = data.acRuntime || '--';
+                    document.getElementById('uptime').textContent = data.uptime || '--';
+                    document.getElementById('ipAddress').textContent = data.ipAddress || '--';
+
                     isRelayOn = data.relayState;
                     document.getElementById('pumpOnBtn').style.backgroundColor = isRelayOn ? 'var(--primary-blue)' : 'var(--green)';
-                document.getElementById('pumpOffBtn').style.backgroundColor = !isRelayOn ? 'var(--primary-blue)' : 'var(--red)';
-                    if(document.getElementById('cost')) {
-                        document.getElementById('cost').textContent = (data.cost || 0).toFixed(2) + ' Rs.';
+                    document.getElementById('pumpOffBtn').style.backgroundColor = !isRelayOn ? 'var(--primary-blue)' : 'var(--red)';
+
+                    // ૨. કંટ્રોલ પરમિશન & પાસવર્ડ
+                    if(data.ctrlPerm !== undefined) {
+                        document.getElementById('ctrlPermCheckbox').checked = data.ctrlPerm;
+                        document.getElementById('secureControlDiv').style.display = data.ctrlPerm ? 'none' : 'block';
                     }
-                    if(data.protectionMsg) {
-                        const pBox = document.getElementById('protection-box');
-                        pBox.textContent = data.protectionMsg;
-                        pBox.className = 'protection-msg ' + (data.protectionMsg.includes('FAULT') ? 'alert' : 'normal');
-                    }
-                   }
+                    if(data.ctrlPass) document.getElementById('ctrlpass').value = data.ctrlPass;
+                    // ESP32 માંથી આવતા 4 પાસવર્ડ સેવ કરવા:
+                    window.espCtrlPass = data.ctrlPass || "1234";
+                    window.espSettingsPass = data.settingsPass || "12345678";
+                    window.espWarrantyPass = data.warrantyPass || "1234";
+                    window.espUptimePass = data.uptimePass || "12345678";
+
+                    // ૩. પ્રોટેક્શન સ્ટેટસ લાઈવ
+                    document.getElementById('ovValue').textContent = (data.ovt || 0) + ' V';
+                    document.getElementById('uvValue').textContent = (data.uvt || 0) + ' V';
+                    document.getElementById('ocValue').textContent = (data.oct || 0) + ' A';
+                    const isFault = (data.protectionMsg || '').includes('FAULT');
+                    updateProtectionIndicator('ovLed', 'ovItem', isFault && data.protectionMsg.includes('Over Voltage'));
+                    updateProtectionIndicator('uvLed', 'uvItem', isFault && data.protectionMsg.includes('Under Voltage'));
+                    updateProtectionIndicator('ocLed', 'ocItem', isFault && data.protectionMsg.includes('Over Current'));
+
+                    const pBox = document.getElementById('protection-box');
+                    pBox.textContent = data.protectionMsg || 'System Operating Normally';
+                    pBox.className = 'protection-msg ' + (isFault ? 'alert' : 'normal');
+
+                    // ૪. રીયલ-ટાઇમ મોનિટરિંગ & એનાલિટિક્સ
+                    document.getElementById('mOnTime').textContent = data.acRuntime || '00:00:00';
+                    document.getElementById('mUnits').textContent = (data.mUnits || 0).toFixed(2);
+                    document.getElementById('mBill').textContent = '₹ ' + (data.mBill || 0).toFixed(2);
+                    document.getElementById('dUsage').textContent = (data.dUsage || 0).toFixed(2);
+                    document.getElementById('lBill').textContent = '₹ ' + (data.lBill || 0).toFixed(2);
+                    if(data.b_start) document.getElementById('billStartDate').value = data.b_start;
+                    if(data.b_end) document.getElementById('billEndDate').value = data.b_end;
+
+                    // ૫. સેટિંગ્સ ડિફોલ્ટ વેલ્યુ લોડિંગ
+                    document.getElementById('quickPrice').value = data.unitPrice || 1.0;
+                    document.getElementById('quickOc').value = data.oct || 10.0;
+                    document.getElementById('maxOcDisplay').textContent = data.maxoct || 25.0;
+                    document.getElementById('ov').value = data.ovt || 280;
+                    document.getElementById('uv').value = data.uvt || 180;
+                    document.getElementById('maxoc').value = data.maxoct || 25;
+                    document.getElementById('vcal').value = data.vcal || 140;
+                    document.getElementById('ccal').value = data.ccal || 30;
+
+                    // ૬. વોરંટી ડેટા
+                    warrantyData.pdate = data.w_pdate; warrantyData.edate = data.w_edate;
+                    warrantyData.type = data.w_type; warrantyData.hidden = data.w_hidden;
+                    displayWarrantyOnMainPage();
+                }
             });
         }
+
+        // GitHub બટનોને Firebase સાથે જોડો જેથી ESP32 મા સેવ થાય:
+        function controlRelay(state) {
+            const perm = document.getElementById('ctrlPermCheckbox').checked;
+            const pass = document.getElementById('ctrlPasswordInput').value;
+            if(!perm && !pass) { alert("કૃપા કરીને Control Password દાખલ કરો!"); return; }
+            if(activeSerial) {
+                rtdb.ref('/devices/' + activeSerial + '/control').update({ relay: (state === 1), pass: pass });
+                document.getElementById('ctrlPasswordInput').value = '';
+            }
+        }
+        function saveDeviceName() {
+            const nm = document.getElementById('deviceNameInput').value;
+            if(!nm) return alert("નામ દાખલ કરો!");
+            if(activeSerial) { rtdb.ref('/devices/' + activeSerial + '/control').update({ device_name: nm }); alert("નામ સેવ થયું!"); }
+        }
+        function restartSystem() { if(confirm("Restart?")) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'restart' }); }
+        function resetEnergyCost() { if(confirm("Reset Cost?")) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'reset_energy' }); }
+        function resetAcRuntime() { if(confirm("Reset Runtime?")) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'reset_runtime' }); }
+        function resetAnalytics() { if(confirm("Reset Analytics?")) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'reset_analytics' }); }
+        function saveBillNow() { if(confirm("Save Bill Now?")) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'save_bill_now' }); }
+        function saveBillingCycle() {
+            const s = document.getElementById('billStartDate').value, e = document.getElementById('billEndDate').value;
+            if(activeSerial) { rtdb.ref('/devices/' + activeSerial + '/control').update({ b_start: s, b_end: e }); alert("તારીખો સેવ થઈ!"); }
+        }
+        // Quick Settings Save
+        document.querySelector('form[action="/savequicksettings"]').onsubmit = function(e) {
+            e.preventDefault();
+            const pr = parseFloat(document.getElementById('quickPrice').value), oc = parseFloat(document.getElementById('quickOc').value);
+            if(activeSerial) { rtdb.ref('/devices/' + activeSerial + '/control').update({ price: pr, oct: oc }); alert("Quick Settings સેવ થઈ ગયા!"); }
+        };
+        // Protected Settings Unlock & Save
+        function unlockSettingsCard() {
+            const p = document.getElementById('unlockSettingsPass').value;
+            if(p === window.espSettingsPass || p === "12345678") {
+                document.getElementById('settingsLockCard').style.display = 'none';
+                document.getElementById('settingsCard').style.display = 'block';
+            } else { alert("ખોટો સેટિંગ્સ પાસવર્ડ!"); }
+        }
+        document.querySelector('form[action="/savesettings"]').onsubmit = function(e) {
+            e.preventDefault();
+            if(activeSerial) {
+                rtdb.ref('/devices/' + activeSerial + '/control').update({
+                    ovt: parseFloat(document.getElementById('ov').value),
+                    uvt: parseFloat(document.getElementById('uv').value),
+                    vcal: parseFloat(document.getElementById('vcal').value),
+                    ccal: parseFloat(document.getElementById('ccal').value)
+                });
+                alert("Protected Settings સેવ થઈ ગયા!");
+            }
+        };
+        // WiFi Credentials Save
+        document.querySelector('form[action="/savewifi"]').onsubmit = function(e) {
+            e.preventDefault();
+            const s = document.querySelector('input[name="ssid"]').value, p = document.querySelector('input[name="password"]').value;
+            if(activeSerial) { rtdb.ref('/devices/' + activeSerial + '/control').update({ wifi_ssid: s, wifi_pass: p, action: 'restart' }); alert("વાઇફાઇ સેવ થયું! સિસ્ટમ રીસ્ટાર્ટ થશે."); }
+        };
         let refreshIntervalId = null;
         let lastAlertState = null;
         let currentPassword = null; 
@@ -767,126 +870,14 @@
                 warrantyData.edate = data.warranty_edate;
                 warrantyData.type = data.warranty_type;
                 warrantyData.hidden = data.warranty_hidden;
-                displayWarrantyOnMainPage();
+                displayWarrantyOnMainPage(); 
             });
         }
-        function resetEnergyCost() { if(confirm("Are you sure?")) { fetch('/resetenergy').then(updateStatus); } }
-        function resetAcRuntime() { if(confirm("Are you sure you want to reset AC Runtime?")) { fetch('/resetruntime').then(updateStatus); } }
+        
         function updateProtectionValue(id, val, trig) { const el = document.getElementById(id); el.textContent = val; el.classList.toggle('triggered', trig); }
         function updateProtectionIndicator(ledId, itemId, isActive) { document.getElementById(ledId).className = `indicator ${isActive ? 'high' : 'low'}`; document.getElementById(itemId).classList.toggle('protection-active', isActive); }
         function checkProtectionAlerts(data) { const isProt = data.protectionMessage.includes('FAULT'); if (isProt && lastAlertState !== data.protectionMessage) { document.getElementById('alertMessage').textContent = data.protectionMessage; document.getElementById('fullPageAlert').style.display = 'flex'; } lastAlertState = isProt ? data.protectionMessage : null; }
-        function toggleAutoRefresh() { const chk = document.getElementById('autoRefreshCheckbox'); if (chk.checked) { refreshIntervalId = setInterval(updateStatus, 2000); } else { clearInterval(refreshIntervalId); } localStorage.setItem('autoRefresh', chk.checked); }
-        function controlRelay(state) { 
-            // Manual ON command also acts as a "reset" for a latched fault
-            if(activeSerial) {
-                rtdb.ref('/devices/' + activeSerial + '/control/relay').set(state === 1);
-            }
-           const pass = document.getElementById('ctrlPasswordInput').value;
-           if (location.hostname !== "localhost" && location.hostname !== "127.0.0.1" && !location.hostname.startsWith("192.168.")) {
-                return; // GitHub Pages પર બિનજરૂરી fetch એરર રોકવા માટે
-            }
-    fetch('/controlRelay?state=' + state + '&pass=' + encodeURIComponent(pass)).then(response => {
-        if (response.status === 401) {
-            alert("Error: Incorrect Control Password!");
-        } else if (response.status === 403) {
-            alert("Cannot turn on AC. System is latched in a fault condition.");
-        } else {
-            document.getElementById('ctrlPasswordInput').value = '';
-            updateStatus(); 
-        }
-    }); 
-}
-
-function toggleControlPermission() {
-    const chk = document.getElementById('ctrlPermCheckbox').checked;
-    
-    // પ્લેન-ટેક્સ્ટ prompt() ને બદલે સિક્યોર પાસવર્ડ ઇનપુટ મોડલ
-    const overlay = document.createElement('div');
-    overlay.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:10000; display:flex; align-items:center; justify-content:center;";
-    
-    const modal = document.createElement('div');
-    modal.style = "background:white; padding:20px; border-radius:10px; text-align:center; box-shadow:0 4px 15px rgba(0,0,0,0.3); max-width:320px; width:90%; color:#212529;";
-    modal.innerHTML = `
-        <p style="font-weight:bold; margin-bottom:15px; color:#007bff; font-family:sans-serif;">Enter Password to Change Permission</p>
-        <input type="password" id="securePromptInput" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:5px; margin-bottom:15px; box-sizing:border-box; font-size:16px;" placeholder="Password">
-        <div style="display:flex; gap:10px;">
-            <button id="securePromptCancel" style="flex:1; background:#dc3545; color:white; border:none; padding:10px; border-radius:5px; cursor:pointer; font-weight:bold;">Cancel</button>
-            <button id="securePromptOk" style="flex:1; background:#28a745; color:white; border:none; padding:10px; border-radius:5px; cursor:pointer; font-weight:bold;">OK</button>
-        </div>
-    `;
-    
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-    
-    const inputField = document.getElementById('securePromptInput');
-    inputField.focus();
-
-    // એન્ટર કી દબાવવા પર ઓટોમેટિક સબમિટ થાય તે માટે
-    inputField.addEventListener("keyup", function(event) {
-        if (event.key === "Enter") {
-            document.getElementById('securePromptOk').click();
-        }
-    });
-    
-    document.getElementById('securePromptCancel').onclick = function() {
-        document.body.removeChild(overlay);
-        document.getElementById('ctrlPermCheckbox').checked = !chk;
-    };
-    
-    document.getElementById('securePromptOk').onclick = function() {
-        const pass = inputField.value;
-        document.body.removeChild(overlay);
-        if (pass === "") {
-            document.getElementById('ctrlPermCheckbox').checked = !chk;
-            return;
-        }
-        fetch('/savecontrolperm?perm=' + (chk ? 1 : 0) + '&pass=' + encodeURIComponent(pass))
-        .then(response => {
-            if (response.ok) {
-                alert("Permission updated successfully!");
-                updateStatus();
-            } else {
-                alert("Failed: Incorrect Password!");
-                document.getElementById('ctrlPermCheckbox').checked = !chk;
-            }
-        });
-    };
-}
-      function toggleCtrlPassFields() {
-        var x = document.getElementById("ctrlPassChangeFields");
-        if (x.style.display === "none") {
-            x.style.display = "block";
-        } else {
-            x.style.display = "none";
-        }
-    }
-    async function changeControlPassword() {
-        const oldP = document.getElementById("oldCtrlPassInput").value;
-        const newP = document.getElementById("newCtrlPassInput").value;
-        if (!oldP || !newP) { alert("Please fill both fields!"); return; }
-        if (newP.length < 4) { alert("New password must be at least 4 characters."); return; }
-        const formData = new FormData();
-        formData.append("old_pass", oldP);
-        formData.append("new_pass", newP);
-        const response = await fetch('/savecontrolpassword', { method: 'POST', body: formData });
-        if(response.ok) {
-            alert("Control Password updated successfully!");
-            document.getElementById("oldCtrlPassInput").value = "";
-            document.getElementById("newCtrlPassInput").value = "";
-            document.getElementById("ctrlPassChangeFields").style.display = "none";
-            updateStatus();
-        } else {
-            alert("Failed to update password: " + await response.text());
-        }
-    }
-        function wifiReset() { 
-            if(confirm("Are you sure you want to perform Wi-Fi Reset? You will need to provision the device again (QR Code).")) { 
-                fetch('/wifireset').then(() => {
-                    alert("Wi-Fi settings cleared. Device is restarting and will enter Provisioning Mode.");
-                }); 
-            }
-        }
-        function restartSystem() { if(confirm("Restart System?")) fetch('/restart'); }
+        function toggleAutoRefresh() { const chk = document.getElementById('autoRefreshCheckbox'); if (chk.checked) { refreshIntervalId = setInterval(updateStatus, 2000); } else { clearInterval(refreshIntervalId); } localStorage.setItem('autoRefresh', chk.checked); } 
         
         function openUptimeReset() {
             document.getElementById('warranty-overlay').style.display = 'flex';
@@ -895,62 +886,51 @@ function toggleControlPermission() {
             document.getElementById('passwordCard').style.display = 'none';
             document.getElementById('mainCard').style.display = 'none';
         }
-       async function saveBillingCycle() {
-            const sDate = document.getElementById('billStartDate').value;
-            const eDate = document.getElementById('billEndDate').value;
-            const eTime = document.getElementById('billEndTime').value;
-            const eAmpm = document.getElementById('billEndAmpm').value;
-
-            if(!sDate || !eDate || !eTime) {
-                alert("Please select Start Date, End Date and End Time.");
-                return;
-            }
-            const response = await fetch(`/savebillingcycle?start=${sDate}&end=${eDate}&etime=${eTime}&eampm=${eAmpm}`);
-            if(response.ok) {
-                alert("Billing Cycle Date & Time Saved Successfully!");
-                updateStatus();
-            } else {
-                alert("Failed to save billing cycle.");
-            }
-        }
-        async function resetAnalytics() {
-    if(confirm("Are you sure you want to reset all Analytics and Billing data to 0?")) {
-        const response = await fetch('/resetanalytics');
-        if(response.ok) {
-            alert("All Analytics Data Reset Successfully!");
-            document.getElementById('billStartDate').value = '';
-            document.getElementById('billEndDate').value = '';
-            updateStatus();
-        } else {
-            alert("Failed to reset analytics data.");
-        }
-    }
- }
- async function saveBillNow() {
-            if(confirm("તમારું અત્યાર સુધીનું બિલ LAST BILL AMOUNT માં સેવ કરીને નવો મહિનો અત્યારથી જ ચાલુ કરવો છે?")) {
-                const response = await fetch('/savebillnow');
-                if(response.ok) {
-                    alert("Bill Saved Successfully! New Month Started.");
-                    updateStatus();
-                } else {
-                    alert("Failed to save bill.");
-                }
-            }
-        }
-        async function submitUptimeReset() {
+        function submitUptimeReset() {
             const pass = document.getElementById('uptimePasswordInput').value;
-            if (pass) {
-                const response = await fetch(`/resetuptime?pass=${encodeURIComponent(pass)}`);
-                if (response.ok) { 
-              alert("Uptime reset successfully!");
-                    closeOverlays();
-                    updateStatus();
-                } else {
-                    alert("Failed to reset uptime: Incorrect Password.");
+            // ESP32 ના UPTIME_RESET_PASSWORD સાથે મેચ થશે
+            if (pass === window.espUptimePass) {
+                if(activeSerial) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'reset_uptime' });
+                alert("Uptime Reset થઈ ગયું!");
+                closeOverlays();
+            } else {
+                alert("ખોટો Uptime પાસવર્ડ!");
+            }
+        }
+        function toggleControlPermission() {
+            const chk = document.getElementById('ctrlPermCheckbox').checked;
+            const pass = prompt("Enter Password to Change Permission:");
+            if (pass !== null && pass !== "") {
+                if (activeSerial) {
+                    rtdb.ref('/devices/' + activeSerial + '/control').update({ set_ctrl_perm: chk, pass: pass });
+                    alert("Permission Updated!");
                 }
             } else {
-                alert("Please enter the password.");
+                document.getElementById('ctrlPermCheckbox').checked = !chk;
             }
+        }
+        function toggleCtrlPassFields() {
+            var x = document.getElementById("ctrlPassChangeFields");
+            x.style.display = (x.style.display === "none") ? "block" : "none";
+        }
+        function changeControlPassword() {
+            const oldP = document.getElementById("oldCtrlPassInput").value;
+            const newP = document.getElementById("newCtrlPassInput").value;
+            if (!oldP || !newP) return alert("બંને ખાના ભરો!");
+            if (newP.length < 4) return alert("નવો પાસવર્ડ ઓછામાં ઓછો 4 અક્ષરનો હોવો જોઈએ!");
+            if (activeSerial) {
+                rtdb.ref('/devices/' + activeSerial + '/control').update({ new_ctrl_pass: newP, pass: oldP });
+                alert("Control Password Updated!");
+                document.getElementById("oldCtrlPassInput").value = "";
+                document.getElementById("newCtrlPassInput").value = "";
+                document.getElementById("ctrlPassChangeFields").style.display = "none";
+            }
+        }
+        function wifiReset() { 
+            if(confirm("શું તમે Wi-Fi રીસેટ કરવા માંગો છો? આનાથી ESP32 ફરી QR કોડ મોડમાં જશે.")) { 
+                if(activeSerial) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'wifireset' });
+                alert("Wi-Fi Reset કમાન્ડ મોકલાઈ ગયો છે!");
+            } 
         }
 
         // બ્રાઉઝર ઓપન થતાં જ ડિવાઇસ લિસ્ટ તૈયાર કરી Firebase લિસનર ચાલુ કરવું
@@ -1146,64 +1126,42 @@ function toggleControlPermission() {
                 alert("Error: " + await response.text());
             }
         }
-        
-        async function clearWarrantyData() {
+      async function clearWarrantyData() {
             if (!currentPassword) { alert("Session expired."); closeOverlays(); return; }
             if (confirm("Are you sure you want to delete all warranty data? This cannot be undone.")) {
-                const formData = new FormData();
-                formData.append('password', currentPassword);
-                const response = await fetch('/clearwarranty', { method: 'POST', body: formData });
-                if (response.ok) {
+                if(activeSerial) {
+                    rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'clear_warranty' });
                     alert("Warranty data cleared!");
-                    await updateStatus();
                     closeOverlays();
-                } else {
-                     alert("Failed to clear data: " + await response.text());
                 }
             }
         }
-        
-        // NEW: Settings Card Unlock Function
-        async function unlockSettingsCard() {
-            const password = document.getElementById("unlockSettingsPass").value;
-            if (!password) { alert("Please enter the Settings Password."); return; }
 
-            const formData = new FormData();
-            formData.append('password', password);
-
-            // Use new endpoint to verify password
-            const response = await fetch('/verifySettingsPass', { method: 'POST', body: formData });
-            if (response.ok) {
-                settingsCardUnlocked = true;
-                settingsUnlockPassword = password;
-                // Hide lock card, show settings card
-                document.getElementById('settingsLockCard').style.display = 'none';
-                document.getElementById('settingsCard').style.display = 'block';
-                // Set the hidden field in the save form
-                document.getElementById('settingsCardPassField').value = password; 
-                alert("Settings Unlocked!");
+        // Warranty Password Check (ESP32 ના પાસવર્ડ સાથે મેચ થશે)
+        function checkPassword() {
+            const password = document.getElementById("passwordInput").value;
+            if (!password) { alert("કૃપા કરીને પાસવર્ડ નાખો."); return; }
+            if (password === window.espWarrantyPass) {
+                currentPassword = password;
+                document.getElementById('passwordCard').style.display = 'none';
+                showMainCard(warrantyData);
             } else {
-                alert("Incorrect Settings Password!");
+                alert("ખોટો Warranty પાસવર્ડ!");
             }
         }
-        async function saveDeviceName() {
-    const newName = document.getElementById('deviceNameInput').value;
-    if (!newName) { 
-        alert("Please enter a name first!"); 
-        return; 
-    }
+
+        function saveDeviceName() {
+            const newName = document.getElementById('deviceNameInput').value.trim();
+            if (!newName) return alert("કૃપા કરીને નામ દાખલ કરો!");
+            if (confirm("નવું નામ રાખવું છે: " + newName + "?")) {
+                if (activeSerial) {
+                    rtdb.ref('/devices/' + activeSerial + '/control').update({ device_name: newName });
+                    alert("નામ સફળતાપૂર્વક બદલાઈ ગયું!");
+                    document.getElementById('deviceNameInput').value = '';
+                }
+            }
+        } 
     
-    if (confirm("Change device name to: " + newName + "?")) {
-        const response = await fetch('/rename?name=' + encodeURIComponent(newName));
-        if (response.ok) {
-            alert("Name updated successfully! App and Web are now synced.");
-            document.getElementById('deviceNameInput').value = ''; 
-            location.reload(); // પેજ રિફ્રેશ કરશે જેથી ફેરફાર દેખાય
-        } else {
-            alert("Error updating name!");
-        }
-    }
-}
     </script>
 </body>
 </html>
