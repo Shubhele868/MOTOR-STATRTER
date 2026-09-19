@@ -1060,23 +1060,6 @@
             document.getElementById('warranty-overlay').style.display = 'none';
             currentPassword = null;
         }
-
-        async function checkPassword() {
-            const password = document.getElementById("passwordInput").value;
-            if (!password) { alert("Please enter a password."); return; }
-            const formData = new FormData();
-            formData.append('password', password);
-            const response = await fetch('/verifywarrantypassword', { method: 'POST', body: formData });
-            if (response.ok) {
-                currentPassword = password;
-                const data = await response.json();
-                document.getElementById('passwordCard').style.display = 'none';
-                showMainCard(data);
-            } else {
-                alert("Incorrect password!");
-            }
-        }
-        
         function showMainCard(data) {
             document.getElementById('mainCard').style.display = 'block';
             document.getElementById('toggleBtn').textContent = data.hidden ? 'Show on Main Page' : 'Hide from Main Page';
