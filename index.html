@@ -756,22 +756,43 @@
             const s = document.getElementById('billStartDate').value;
             const e = document.getElementById('billEndDate').value;
             const tm = document.getElementById('billEndTime').value;
-            const ampm = document.getElementById('billEndAmpm').value;
-            if(activeSerial) { 
-                rtdb.ref('/devices/' + activeSerial + '/control').update({ 
-                    b_start: s, 
-                    b_end: e,
-                    b_etime: tm,
-                    b_eampm: ampm
-                }); 
-                alert("Billing Dates અને Time (AM/PM) સેવ થઈ ગયા!"); 
+            const ampm = document.getElementById('billEndAmpm').value; 
+          document.querySelector('form[action="/savequicksettings"]').onsubmit = function(e) {
+            e.preventDefault(); // પેજ રિફ્રેશ થતું રોકશે જેથી જૂની વેલ્યુ પાછી ન આવી જાય
+            
+            const prInput = document.getElementById('quickPrice');
+            const ocInput = document.getElementById('quickOc');
+            
+            const pr = parseFloat(prInput.value);
+            const oc = parseFloat(ocInput.value);
+            const maxOcAllowed = parseFloat(document.getElementById('maxOcDisplay').textContent) || 25.0;
+
+            if (isNaN(pr) || isNaN(oc)) {
+                alert("કૃપા કરીને સાચી સંખ્યા દાખલ કરો!");
+                return;
             }
-        }
-        // Quick Settings Save
-        document.querySelector('form[action="/savequicksettings"]').onsubmit = function(e) {
-            e.preventDefault();
-            const pr = parseFloat(document.getElementById('quickPrice').value), oc = parseFloat(document.getElementById('quickOc').value);
-            if(activeSerial) { rtdb.ref('/devices/' + activeSerial + '/control').update({ price: pr, oct: oc }); alert("Quick Settings સેવ થઈ ગયા!"); }
+
+            if (oc > maxOcAllowed) {
+                alert("Error: Over Current limit Maximum Allowed Limit (" + maxOcAllowed + "A) કરતાં વધારે ન હોઈ શકે!");
+                return;
+            }
+
+            if(activeSerial) {
+                // ફોકસ હટાવી લેવું જેથી નવી વેલ્યુ તરત દેખાય
+                prInput.blur();
+                ocInput.blur();
+
+                rtdb.ref('/devices/' + activeSerial + '/control').update({ 
+                    price: pr, 
+                    oct: oc 
+                }).then(() => {
+                    alert("Quick Settings (Unit Price & OC Limit) સફળતાપૂર્વક સેવ થઈ ગયા!");
+                }).catch((err) => {
+                    alert("Error saving: " + err.message);
+                });
+            } else {
+                alert("કોઈ ડિવાઇસ પસંદ કરેલ નથી!");
+            }
         };
         // Protected Settings Unlock & Save
         function unlockSettingsCard() {
