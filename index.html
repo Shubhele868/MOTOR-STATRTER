@@ -750,7 +750,36 @@
         function restartSystem() { if(confirm("Restart?")) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'restart' }); }
         function resetEnergyCost() { if(confirm("Reset Cost?")) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'reset_energy' }); }
         function resetAcRuntime() { if(confirm("Reset Runtime?")) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'reset_runtime' }); }
-        function resetAnalytics() { if(confirm("Reset Analytics?")) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'reset_analytics' }); }
+         function resetAnalytics() {
+            if(confirm("Are you sure you want to reset all Analytics and Billing data to 0?")) {
+                if(activeSerial) {
+                    // ૧. Firebase માં કમાન્ડ મોકલવો જેથી ESP32 મેમરીમાં 0 કરે
+                    rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'reset_analytics' });
+                    
+                    // ૨. Firebase status માં પણ તરત 0 મોકલવું
+                    rtdb.ref('/devices/' + activeSerial + '/status').update({
+                        mUnits: 0.0,
+                        mBill: 0.0,
+                        dUsage: 0.0,
+                        lBill: 0.0,
+                        acRuntime: "00:00:00",
+                        b_start: "",
+                        b_end: ""
+                    });
+
+                    // ૩. સ્ક્રીન પરના ખાના તરત જ 0.00 કરવા
+                    document.getElementById('mOnTime').textContent = "00:00:00";
+                    document.getElementById('mUnits').textContent = "0.00";
+                    document.getElementById('mBill').textContent = "₹ 0.00";
+                    document.getElementById('dUsage').textContent = "0.00";
+                    document.getElementById('lBill').textContent = "₹ 0.00";
+                    document.getElementById('billStartDate').value = "";
+                    document.getElementById('billEndDate').value = "";
+
+                    alert("All Analytics Data Reset to 0 Successfully!");
+                }
+            }
+        }
         function saveBillNow() { if(confirm("Save Bill Now?")) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'save_bill_now' }); }
           function saveBillingCycle() {
             const s = document.getElementById('billStartDate').value;
