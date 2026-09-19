@@ -698,16 +698,31 @@
                     if(data.b_start) document.getElementById('billStartDate').value = data.b_start;
                     if(data.b_end) document.getElementById('billEndDate').value = data.b_end;
                     if(data.b_etime) document.getElementById('billEndTime').value = data.b_etime;
-                    if(data.b_eampm) document.getElementById('billEndAmpm').value = data.b_eampm;
+                    if(data.b_eampm) document.getElementById('billEndAmpm').value = data.b_eampm; 
                     // ૫. સેટિંગ્સ ડિફોલ્ટ વેલ્યુ લોડિંગ
-                    document.getElementById('quickPrice').value = data.unitPrice || 1.0;
-                    document.getElementById('quickOc').value = data.oct || 10.0;
-                    document.getElementById('maxOcDisplay').textContent = data.maxoct || 25.0;
-                    document.getElementById('ov').value = data.ovt || 280;
-                    document.getElementById('uv').value = data.uvt || 180;
-                    document.getElementById('maxoc').value = data.maxoct || 25;
-                    document.getElementById('vcal').value = data.vcal || 140;
-                    document.getElementById('ccal').value = data.ccal || 30;
+                     if (document.activeElement !== document.getElementById('quickPrice')) {
+                        document.getElementById('quickPrice').value = data.unitPrice !== undefined ? data.unitPrice : 1.0;
+                    }
+                    if (document.activeElement !== document.getElementById('quickOc')) {
+                        document.getElementById('quickOc').value = data.oct !== undefined ? data.oct : 10.0;
+                    }
+                    document.getElementById('maxOcDisplay').textContent = data.maxoct !== undefined ? data.maxoct : 25.0;
+
+                    if (document.activeElement !== document.getElementById('ov')) {
+                        document.getElementById('ov').value = data.ovt !== undefined ? data.ovt : 280;
+                    }
+                    if (document.activeElement !== document.getElementById('uv')) {
+                        document.getElementById('uv').value = data.uvt !== undefined ? data.uvt : 180;
+                    }
+                    if (document.activeElement !== document.getElementById('maxoc')) {
+                        document.getElementById('maxoc').value = data.maxoct !== undefined ? data.maxoct : 25;
+                    }
+                    if (document.activeElement !== document.getElementById('vcal')) {
+                        document.getElementById('vcal').value = data.vcal !== undefined ? data.vcal : 140;
+                    }
+                    if (document.activeElement !== document.getElementById('ccal')) {
+                        document.getElementById('ccal').value = data.ccal !== undefined ? data.ccal : 30;
+                    }
 
                     // ૬. વોરંટી ડેટા
                     warrantyData.pdate = data.w_pdate; warrantyData.edate = data.w_edate;
@@ -765,17 +780,26 @@
                 document.getElementById('settingsLockCard').style.display = 'none';
                 document.getElementById('settingsCard').style.display = 'block';
             } else { alert("ખોટો સેટિંગ્સ પાસવર્ડ!"); }
-        }
+        } 
         document.querySelector('form[action="/savesettings"]').onsubmit = function(e) {
-            e.preventDefault();
+            e.preventDefault(); // પેજ રિફ્રેશ થતું અટકાવશે
             if(activeSerial) {
+                const ovVal = parseFloat(document.getElementById('ov').value);
+                const uvVal = parseFloat(document.getElementById('uv').value);
+                const maxocVal = parseFloat(document.getElementById('maxoc').value);
+                const vcalVal = parseFloat(document.getElementById('vcal').value);
+                const ccalVal = parseFloat(document.getElementById('ccal').value);
+
                 rtdb.ref('/devices/' + activeSerial + '/control').update({
-                    ovt: parseFloat(document.getElementById('ov').value),
-                    uvt: parseFloat(document.getElementById('uv').value),
-                    vcal: parseFloat(document.getElementById('vcal').value),
-                    ccal: parseFloat(document.getElementById('ccal').value)
+                    ovt: ovVal,
+                    uvt: uvVal,
+                    maxoct: maxocVal,
+                    vcal: vcalVal,
+                    ccal: ccalVal
                 });
-                alert("Protected Settings સેવ થઈ ગયા!");
+                alert("Protected Settings (Calibration) સફળતાપૂર્વક Firebase માં સેવ થઈ ગયા!");
+            } else {
+                alert("કોઈ ડિવાઇસ સિલેક્ટ કરેલું નથી!");
             }
         };
         // WiFi Credentials Save
