@@ -779,8 +779,55 @@
                     alert("All Analytics Data Reset to 0 Successfully!");
                 }
             }
+        } 
+         function saveBillNow() {
+            if(confirm("તમારું અત્યાર સુધીનું બિલ LAST BILL AMOUNT માં સેવ કરીને નવો મહિનો અત્યારથી જ ચાલુ કરવો છે?")) {
+                if(activeSerial) {
+                    // ૧. ચાલુ મહિનાનું બિલ ગણીને Last Bill માં લેવું
+                    const curBillText = document.getElementById('mBill').textContent.replace('₹', '').trim();
+                    const currentBillVal = parseFloat(curBillText) || 0.0;
+
+                    // ૨. નવી તારીખો (૧ મહિનો આગળ) ગણવી
+                    let sDate = document.getElementById('billEndDate').value;
+                    let eDate = "";
+                    
+                    if (!sDate) {
+                        sDate = new Date().toISOString().split('T')[0];
+                    }
+                    
+                    let nextMonth = new Date(sDate);
+                    nextMonth.setMonth(nextMonth.getMonth() + 1);
+                    eDate = nextMonth.toISOString().split('T')[0];
+
+                    // ૩. Firebase માં ESP32 માટે કમાન્ડ અને નવી તારીખો મોકલવી
+                    rtdb.ref('/devices/' + activeSerial + '/control').update({ 
+                        action: 'save_bill_now',
+                        b_start: sDate,
+                        b_end: eDate
+                    });
+
+                    // ૪. Firebase status માં પણ તરત જ 0.00 અને નવી તારીખો અપડેટ કરવી
+                    rtdb.ref('/devices/' + activeSerial + '/status').update({
+                        lBill: currentBillVal,
+                        mUnits: 0.0,
+                        mBill: 0.0,
+                        mTime: "00:00:00",
+                        b_start: sDate,
+                        b_end: eDate
+                    });
+
+                    // ૫. સ્ક્રીન પર તમામ ખાના તાત્કાલિક 0.00 અને નવી તારીખો સાથે બતાવવા
+                    document.getElementById('lBill').textContent = '₹ ' + currentBillVal.toFixed(2);
+                    document.getElementById('mUnits').textContent = '0.00';
+                    document.getElementById('mBill').textContent = '₹ 0.00';
+                    document.getElementById('mOnTime').textContent = '00:00:00';
+                    document.getElementById('billStartDate').value = sDate;
+                    document.getElementById('billEndDate').value = eDate;
+
+                    alert("Current Bill Saved! New Month Started with Next Month Dates.");
+                }
+            }
         }
-        function saveBillNow() { if(confirm("Save Bill Now?")) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'save_bill_now' }); }
           function saveBillingCycle() {
             const s = document.getElementById('billStartDate').value;
             const e = document.getElementById('billEndDate').value;
