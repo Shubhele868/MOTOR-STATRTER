@@ -756,8 +756,19 @@
             const s = document.getElementById('billStartDate').value;
             const e = document.getElementById('billEndDate').value;
             const tm = document.getElementById('billEndTime').value;
-            const ampm = document.getElementById('billEndAmpm').value; 
-          document.querySelector('form[action="/savequicksettings"]').onsubmit = function(e) {
+            const ampm = document.getElementById('billEndAmpm').value;
+            if(activeSerial) { 
+                rtdb.ref('/devices/' + activeSerial + '/control').update({ 
+                    b_start: s, 
+                    b_end: e,
+                    b_etime: tm,
+                    b_eampm: ampm
+                }); 
+                alert("Billing Dates અને Time (AM/PM) સેવ થઈ ગયા!"); 
+            }
+        }
+
+        document.querySelector('form[action="/savequicksettings"]').onsubmit = function(e) {
             e.preventDefault(); // પેજ રિફ્રેશ થતું રોકશે જેથી જૂની વેલ્યુ પાછી ન આવી જાય
             
             const prInput = document.getElementById('quickPrice');
