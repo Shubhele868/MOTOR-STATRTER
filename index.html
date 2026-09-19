@@ -690,7 +690,7 @@
                     pBox.className = 'protection-msg ' + (isFault ? 'alert' : 'normal');
 
                     // ૪. રીયલ-ટાઇમ મોનિટરિંગ & એનાલિટિક્સ
-                    document.getElementById('mOnTime').textContent = data.acRuntime || '00:00:00';
+                    document.getElementById('mOnTime').textContent = data.mTime || '00:00:00';
                     document.getElementById('mUnits').textContent = (data.mUnits || 0).toFixed(2);
                     document.getElementById('mBill').textContent = '₹ ' + (data.mBill || 0).toFixed(2);
                     document.getElementById('dUsage').textContent = (data.dUsage || 0).toFixed(2);
@@ -749,25 +749,25 @@
         }
         function restartSystem() { if(confirm("Restart?")) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'restart' }); }
         function resetEnergyCost() { if(confirm("Reset Cost?")) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'reset_energy' }); }
-        function resetAcRuntime() { if(confirm("Reset Runtime?")) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'reset_runtime' }); }
+        function resetAcRuntime() { if(confirm("Reset Runtime?")) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'reset_runtime' }); } 
          function resetAnalytics() {
             if(confirm("Are you sure you want to reset all Analytics and Billing data to 0?")) {
                 if(activeSerial) {
-                    // ૧. Firebase માં કમાન્ડ મોકલવો જેથી ESP32 મેમરીમાં 0 કરે
+                    // ૧. Firebase Control માં કમાન્ડ મોકલવો જેથી ESP32 મેમરીમાં 0 કરે
                     rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'reset_analytics' });
                     
-                    // ૨. Firebase status માં પણ તરત 0 મોકલવું
+                    // ૨. Firebase status માં પણ સીધું 0.0 મોકલી દેવું
                     rtdb.ref('/devices/' + activeSerial + '/status').update({
                         mUnits: 0.0,
                         mBill: 0.0,
                         dUsage: 0.0,
                         lBill: 0.0,
-                        acRuntime: "00:00:00",
+                        mTime: "00:00:00",
                         b_start: "",
                         b_end: ""
                     });
 
-                    // ૩. સ્ક્રીન પરના ખાના તરત જ 0.00 કરવા
+                    // ૩. વેબપેજના તમામ ખાના તાત્કાલિક 0.00 કરવા
                     document.getElementById('mOnTime').textContent = "00:00:00";
                     document.getElementById('mUnits').textContent = "0.00";
                     document.getElementById('mBill').textContent = "₹ 0.00";
@@ -1230,19 +1230,6 @@
                 alert("ખોટો Warranty પાસવર્ડ!");
             }
         }
-
-        function saveDeviceName() {
-            const newName = document.getElementById('deviceNameInput').value.trim();
-            if (!newName) return alert("કૃપા કરીને નામ દાખલ કરો!");
-            if (confirm("નવું નામ રાખવું છે: " + newName + "?")) {
-                if (activeSerial) {
-                    rtdb.ref('/devices/' + activeSerial + '/control').update({ device_name: newName });
-                    alert("નામ સફળતાપૂર્વક બદલાઈ ગયું!");
-                    document.getElementById('deviceNameInput').value = '';
-                }
-            }
-        } 
-    
-    </script>
+        </script>
 </body>
 </html>
