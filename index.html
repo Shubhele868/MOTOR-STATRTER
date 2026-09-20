@@ -868,9 +868,13 @@
         function resetAcRuntime() { if(confirm("Reset Runtime?")) rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'reset_runtime' }); } 
          function resetAnalytics() {
             if(confirm("Are you sure you want to reset all Analytics and Billing data to 0?")) {
-                if(activeSerial) {
-                    // ૧. Firebase Control માં કમાન્ડ મોકલવો જેથી ESP32 મેમરીમાં 0 કરે
-                    rtdb.ref('/devices/' + activeSerial + '/control').update({ action: 'reset_analytics' });
+                 if(activeSerial) {
+                    // ૧. Firebase Control માંથી જૂની તારીખો ડીલીટ કરવી અને રીસેટ એક્શન મોકલવી
+                    rtdb.ref('/devices/' + activeSerial + '/control').update({ 
+                        action: 'reset_analytics',
+                        b_start: null,
+                        b_end: null
+                    });
                     
                     // ૨. Firebase status માં પણ સીધું 0.0 મોકલી દેવું
                     rtdb.ref('/devices/' + activeSerial + '/status').update({
@@ -894,8 +898,6 @@
 
                     alert("All Analytics Data Reset to 0 Successfully!");
                 }
-            }
-        } 
          function saveBillNow() {
             if(confirm("તમારું અત્યાર સુધીનું બિલ LAST BILL AMOUNT માં સેવ કરીને નવો મહિનો અત્યારથી જ ચાલુ કરવો છે?")) {
                 if(activeSerial) {
