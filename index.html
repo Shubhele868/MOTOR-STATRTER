@@ -257,6 +257,21 @@
             <button onclick="addNewDeviceSerial()" style="width:auto; margin:0; padding:8px 15px; background:var(--green); font-weight:bold;">+ Add Device</button> 
             <button onclick="removeCurrentDevice()" style="width:auto; margin:0; padding:8px 12px; background:var(--red); font-weight:bold;">Delete Active</button>
         </div>
+         <div style="background:#0f1218; border:2px solid #007bff; padding:15px; border-radius:10px; margin-top:15px; margin-bottom:10px; box-shadow:0 4px 15px rgba(0,123,255,0.3); text-align:center;">
+            <h3 style="color:#ffcc00; font-size:1rem; margin-top:0; margin-bottom:12px; text-transform:uppercase; letter-spacing:1.5px;">
+                📡 DEVICE SERIAL & CONNECTED WI-FI IP
+            </h3>
+            <div style="display:flex; flex-wrap:wrap; justify-content:space-around; align-items:center; gap:15px;">
+                <div style="background:#161b22; padding:10px 20px; border-radius:8px; border:1px solid #30363d; min-width:200px;">
+                    <span style="color:#8da9c4; font-size:0.8rem; font-weight:bold; display:block; margin-bottom:4px;">SERIAL NUMBER:</span>
+                    <span id="liveDeviceSerial" style="color:#00ffcc; font-size:1.15rem; font-weight:bold; font-family:monospace;">SPGT-Loading...</span>
+                </div>
+                <div style="background:#161b22; padding:10px 20px; border-radius:8px; border:1px solid #30363d; min-width:200px;">
+                    <span style="color:#8da9c4; font-size:0.8rem; font-weight:bold; display:block; margin-bottom:4px;">CONNECTED WI-FI IP:</span>
+                    <span id="liveDeviceIP" style="color:#28a745; font-size:1.15rem; font-weight:bold; font-family:monospace;">0.0.0.0</span>
+                </div>
+            </div>
+        </div>
 
         <!-- નીચે એડ કરેલા તમામ ડિવાઇસની યાદી (નામ અને સિરિયલ નંબર સાથે) બતાવવા માટે -->
         <div id="addedDevicesContainer" style="background:#0f1218; padding:15px; border-radius:10px; margin-top:10px; margin-bottom:20px; box-shadow:0 4px 15px rgba(0,0,0,0.4); display:none;">
@@ -684,11 +699,11 @@
 
                 let itemDiv = document.createElement('div');
                 itemDiv.style = `display:flex; justify-content:space-between; align-items:center; background:${isCurrentActive ? '#1c2541' : '#161b22'}; padding:8px 12px; border-radius:6px; border:1px solid ${isCurrentActive ? '#007bff' : '#30363d'};`;
-                
                 itemDiv.innerHTML = `
                     <div>
-                        <span style="color:#00ffcc; font-weight:bold; font-size:0.95rem;">${index + 1}. ${devName}</span>
+                        <span style="color:#00ffcc; font-weight:bold; font-size:0.95rem;">${index + 1}. ${devName}</span> 
                         <span style="color:#8da9c4; font-size:0.8rem; margin-left:8px; font-family:monospace;">(${sn})</span>
+                        <span id="list_ip_${sn}" style="background:#007bff; color:#ffffff; font-size:0.75rem; padding:2px 7px; border-radius:4px; margin-left:8px; font-family:monospace; font-weight:bold;">IP: Loading...</span>
                         ${isCurrentActive ? '<span style="background:#28a745; color:white; font-size:0.65rem; padding:2px 5px; border-radius:3px; margin-left:8px; font-weight:bold;">ACTIVE</span>' : ''}
                     </div>
                     <div>
@@ -696,6 +711,12 @@
                         <button onclick="removeDeviceBySerial('${sn}')" style="background:#dc3545; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:0.8rem; font-weight:bold;">Delete</button>
                     </div>
                 `;
+                // ૨૦ ડિવાઇસના લાઈવ IP લિસ્ટમાં લાવવા માટે
+                rtdb.ref('/devices/' + sn + '/status/ipAddress').on('value', snap => {
+                    const el = document.getElementById('list_ip_' + sn);
+                    if (el) el.textContent = 'IP: ' + (snap.val() || 'Offline');
+                });
+                
                 content.appendChild(itemDiv);
             });
         }
@@ -727,6 +748,13 @@
         function listenToActiveDevice() {
             if(currentFbRef) currentFbRef.off();
             if(!activeSerial) return; 
+              const sBoxInit = document.getElementById('liveDeviceSerial');
+            const ipBoxInit = document.getElementById('liveDeviceIP');
+            if (sBoxInit) sBoxInit.textContent = activeSerial || '--';
+            if (ipBoxInit) {
+                ipBoxInit.textContent = 'Loading IP...';
+                ipBoxInit.style.color = '#ffcc00';
+            }
             currentFbRef = rtdb.ref('/devices/' + activeSerial + '/status');
             currentFbRef.on('value', snapshot => {
                 const data = snapshot.val();
@@ -740,7 +768,14 @@
                     document.getElementById('acRuntime').textContent = data.acRuntime || '--';
                     document.getElementById('uptime').textContent = data.uptime || '--';
                     document.getElementById('ipAddress').textContent = data.ipAddress || '--';
-
+                    const sBox = document.getElementById('liveDeviceSerial');
+                    const ipBox = document.getElementById('liveDeviceIP');
+                    if (sBox) sBox.textContent = activeSerial || '--';
+                    if (ipBox) {
+                        ipBox.textContent = data.ipAddress || 'Disconnected';
+                        ipBox.style.color = (data.ipAddress && data.ipAddress !== 'Disconnected') ? '#28a745' : '#dc3545';
+                    }
+                  
                     isRelayOn = data.relayState;
                     document.getElementById('pumpOnBtn').style.backgroundColor = isRelayOn ? 'var(--primary-blue)' : 'var(--green)';
                     document.getElementById('pumpOffBtn').style.backgroundColor = !isRelayOn ? 'var(--primary-blue)' : 'var(--red)';
