@@ -1213,30 +1213,30 @@
                 if(!activeSerial) activeSerial = myDeviceList[0];
                 listenToActiveDevice();
             }
-             if(myDeviceList.length === 0) {
-                rtdb.ref('/devices').once('value', snap => {
-                    const allDevs = snap.val();
-                    if(allDevs) {
-                        Object.keys(allDevs).forEach(sn => {
-                            if(!myDeviceList.includes(sn)) {
-                                myDeviceList.push(sn);
-                                deviceAliases[sn] = (allDevs[sn].status && allDevs[sn].status.deviceName) ? allDevs[sn].status.deviceName : "AC";
-                            }
-                        });
-                        localStorage.setItem('spgt_devices', JSON.stringify(myDeviceList));
-                        localStorage.setItem('spgt_device_aliases', JSON.stringify(deviceAliases));
-                        if(myDeviceList.length > 0) {
-                            activeSerial = myDeviceList[0];
-                            localStorage.setItem('spgt_active_serial', activeSerial);
-                            updateDeviceDropdown();
-                            updateAddedDevicesUI();
-                            listenToActiveDevice();
-                        }
-                    }
-                }, error => {
-                    alert("Firebase Rules Error: " + error.message + "\nકૃપા કરીને Firebase Realtime Database માં Rules -> .read: true કરો!");
-                });
-            }
+            //  if(myDeviceList.length === 0) { 
+            //     rtdb.ref('/devices').once('value', snap => {
+            //         const allDevs = snap.val();
+            //         if(allDevs) {
+            //             Object.keys(allDevs).forEach(sn => {
+            //                 if(!myDeviceList.includes(sn)) {
+            //                     myDeviceList.push(sn);
+            //                     deviceAliases[sn] = (allDevs[sn].status && allDevs[sn].status.deviceName) ? allDevs[sn].status.deviceName : "AC";
+            //                 }
+            //             });
+            //             localStorage.setItem('spgt_devices', JSON.stringify(myDeviceList));
+            //             localStorage.setItem('spgt_device_aliases', JSON.stringify(deviceAliases));
+            //             if(myDeviceList.length > 0) {
+            //                 activeSerial = myDeviceList[0];
+            //                 localStorage.setItem('spgt_active_serial', activeSerial);
+            //                 updateDeviceDropdown();
+            //                 updateAddedDevicesUI();
+            //                 listenToActiveDevice();
+            //             }
+            //         }
+            //     }, error => {
+            //         alert("Firebase Rules Error: " + error.message + "\nકૃપા કરીને Firebase Realtime Database માં Rules -> .read: true કરો!");
+            //     });
+            // }
             updateAddedDevicesUI();
 
             const autoRefresh = localStorage.getItem('autoRefresh') === 'true';
