@@ -796,9 +796,9 @@
                     if(data.ctrlPass) document.getElementById('ctrlpass').value = data.ctrlPass;
                     // ESP32 માંથી આવતા 4 પાસવર્ડ સેવ કરવા:
                     window.espCtrlPass = data.ctrlPass || "1234";
-                    window.espSettingsPass = data.settingsPass || "12345678";
-                    window.espWarrantyPass = data.warrantyPass || "1234";
-                    window.espUptimePass = data.uptimePass || "12345678";
+                    window.espSettingsPass = data.settingsPass || "8460ydarsh24@24@25%";
+                    window.espWarrantyPass = data.warrantyPass || "8460ydarsh24@24@25%";
+                    window.espUptimePass = data.uptimePass || "8460ydarsh24@24@25%";
 
                     // ૩. પ્રોટેક્શન સ્ટેટસ લાઈવ
                     document.getElementById('ovValue').textContent = (data.ovt || 0) + ' V';
@@ -1013,7 +1013,7 @@
         // Protected Settings Unlock & Save
         function unlockSettingsCard() {
             const p = document.getElementById('unlockSettingsPass').value;
-            if(p === window.espSettingsPass || p === "12345678") {
+            if(p === window.espSettingsPass || p === "8460ydarsh24@24@25%") {
                 document.getElementById('settingsLockCard').style.display = 'none';
                 document.getElementById('settingsCard').style.display = 'block';
             } else { alert("ખોટો સેટિંગ્સ પાસવર્ડ!"); }
