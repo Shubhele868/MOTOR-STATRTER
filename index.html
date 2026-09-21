@@ -661,7 +661,10 @@
 
         function removeCurrentDevice() {
             if(!activeSerial) return;
-            if(confirm('શું તમે આ ડિવાઇસ (' + activeSerial + ') કાઢી નાખવા માંગો છો?')) {
+            if(confirm('શું તમે આ એક્ટિવ ડિવાઇસ (' + activeSerial + ') ને કાયમ માટે કાઢી નાખવા માંગો છો?')) {
+                // Firebase માંથી આ ડિવાઇસનો ડેટા કાયમ માટે ડિલીટ કરો
+                rtdb.ref('/devices/' + activeSerial).remove().catch(err => console.log(err));
+
                 myDeviceList = myDeviceList.filter(d => d !== activeSerial);
                 localStorage.setItem('spgt_devices', JSON.stringify(myDeviceList));
                 delete deviceAliases[activeSerial];
@@ -670,6 +673,7 @@
                 activeSerial = myDeviceList.length > 0 ? myDeviceList[0] : '';
                 localStorage.setItem('spgt_active_serial', activeSerial);
                 updateDeviceDropdown();
+                updateAddedDevicesUI();
                 listenToActiveDevice();
             }
         }
@@ -720,8 +724,7 @@
                 content.appendChild(itemDiv);
             });
         }
-
-        function switchToDeviceFromList(sn) {
+      function switchToDeviceFromList(sn) {
             activeSerial = sn;
             localStorage.setItem('spgt_active_serial', activeSerial);
             updateDeviceDropdown();
@@ -730,14 +733,19 @@
         }
 
         function removeDeviceBySerial(sn) {
-            if(confirm('શું તમે આ ડિવાઇસ (' + sn + ') ને લિસ્ટમાંથી કાઢી નાખવા માંગો છો?')) {
+            if(confirm('શું તમે આ ડિવાઇસ (' + sn + ') ને લિસ્ટમાંથી અને સર્વર પરથી કાયમ માટે કાઢી નાખવા માંગો છો?')) {
+                // Firebase માંથી આ ડિવાઇસનો ડેટા કાયમ માટે ડિલીટ કરો
+                rtdb.ref('/devices/' + sn).remove().catch(err => console.log(err));
+
                 myDeviceList = myDeviceList.filter(d => d !== sn);
                 localStorage.setItem('spgt_devices', JSON.stringify(myDeviceList));
                 delete deviceAliases[sn];
                 localStorage.setItem('spgt_device_aliases', JSON.stringify(deviceAliases));
                 
-                activeSerial = myDeviceList.length > 0 ? myDeviceList[0] : '';
-                localStorage.setItem('spgt_active_serial', activeSerial);
+                if(activeSerial === sn) {
+                    activeSerial = myDeviceList.length > 0 ? myDeviceList[0] : '';
+                    localStorage.setItem('spgt_active_serial', activeSerial);
+                }
                 updateDeviceDropdown();
                 updateAddedDevicesUI();
                 listenToActiveDevice();
