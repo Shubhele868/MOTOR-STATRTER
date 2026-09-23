@@ -1026,6 +1026,7 @@
                 const maxocVal = parseFloat(document.getElementById('maxoc').value);
                 const vcalVal = parseFloat(document.getElementById('vcal').value);
                 const ccalVal = parseFloat(document.getElementById('ccal').value);
+                const ctrlPassVal = document.getElementById('ctrlpass').value;
 
                 rtdb.ref('/devices/' + activeSerial + '/control').update({
                     ovt: ovVal,
@@ -1033,6 +1034,7 @@
                     maxoct: maxocVal,
                     vcal: vcalVal,
                     ccal: ccalVal
+                    new_ctrl_pass: ctrlPassVal // Control Password Firebase માં મોકલવો
                 });
                 alert("Protected Settings (Calibration) સફળતાપૂર્વક Firebase માં સેવ થઈ ગયા!");
             } else {
